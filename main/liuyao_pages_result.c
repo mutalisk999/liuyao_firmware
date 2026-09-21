@@ -126,7 +126,7 @@ static void reading_build(struct liyao_app_s *app) {
     lv_obj_set_style_text_font(page_label, &liuyao_font_16, 0);
     lv_obj_set_style_text_color(page_label, lv_color_hex(LY_COLOR_GOLD), 0);
     lv_label_set_text(page_label, "");
-    lv_obj_set_pos(page_label, 186, 8);
+    lv_obj_set_pos(page_label, 150, 8);  // 电量在右上角,页码左移避开
     app->reading.page_label = page_label;
 
     lv_obj_t *hint = lv_label_create(app->screen);

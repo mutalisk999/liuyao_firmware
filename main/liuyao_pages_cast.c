@@ -147,13 +147,14 @@ static void cast_build(struct liyao_app_s *app) {
     lv_obj_set_style_text_color(app->cast.result_label,
                                 lv_color_hex(LY_COLOR_PAPER), 0);
     lv_obj_set_pos(app->cast.result_label, 62, 164);
+    lv_label_set_text(app->cast.result_label, "");  // 清掉 LVGL 默认的 "Text"
 
-    // 右侧六爻进度(自上而上 -> 上爻在上)。
+    // 右侧六爻进度(上爻在上,初爻在下);置于"第N爻"标题之下避免重叠。
     for (int i = 0; i < LIUYAO_LINE_COUNT; i++) {
         lv_obj_t *slot = lv_obj_create(app->screen);
         lv_obj_remove_style_all(slot);
         lv_obj_set_size(slot, 26, 20);
-        lv_obj_set_pos(slot, 196, 60 + (LIUYAO_LINE_COUNT - 1 - i) * 24);
+        lv_obj_set_pos(slot, 196, 92 + (LIUYAO_LINE_COUNT - 1 - i) * 24);
         app->cast.progress[i] = slot;
     }
 
@@ -247,8 +248,8 @@ static void manual_build(struct liyao_app_s *app) {
     lv_obj_t *hint = lv_label_create(app->screen);
     lv_obj_set_style_text_font(hint, &liuyao_font_16, 0);
     lv_obj_set_style_text_color(hint, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
-    lv_label_set_text(hint, "上下换值 · OK 下爻 · 长按返回");
-    lv_obj_set_pos(hint, 24, 258);
+    lv_label_set_text(hint, "上下换值 · OK 下爻");
+    lv_obj_set_pos(hint, 48, 258);
     manual_refresh(app);
 }
 

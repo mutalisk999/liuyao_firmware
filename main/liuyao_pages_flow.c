@@ -163,15 +163,17 @@ static void date_clamp(struct liyao_app_s *app) {
 
 static void date_build(struct liyao_app_s *app) {
     app->screen = liuyao_page_create("起卦时间");
+    // 字段横坐标按内容宽度分配(年 4 位数字最宽),避免相邻字段粘连。
+    static const int k_field_x[LY_DATE_FIELD_COUNT] = {10, 82, 132, 182};
     for (int i = 0; i < LY_DATE_FIELD_COUNT; i++) {
         lv_obj_t *title = lv_label_create(app->screen);
         lv_obj_set_style_text_font(title, &liuyao_font_24, 0);
-        lv_obj_set_pos(title, 34 + i * 52, 108);
+        lv_obj_set_pos(title, k_field_x[i], 108);
         lv_label_set_text(title, k_date_title[i]);
         app->date.titles[i] = title;
         lv_obj_t *value = lv_label_create(app->screen);
         lv_obj_set_style_text_font(value, &liuyao_font_24, 0);
-        lv_obj_set_pos(value, 22 + i * 52, 140);
+        lv_obj_set_pos(value, k_field_x[i], 140);
         app->date.values[i] = value;
     }
     lv_obj_t *hint = lv_label_create(app->screen);

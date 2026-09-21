@@ -9,6 +9,7 @@
 #define LY_COLOR_PANEL   0x201D2B  // 面板
 #define LY_COLOR_PANEL_2 0x2A2638  // 面板高亮
 #define LY_COLOR_PAPER   0xEDE3D0  // 宣纸字色
+#define LY_COLOR_INK     0x232030  // 墨字(浅底上的正文字色)
 #define LY_COLOR_PAPER_DIM 0x9A90A6  // 次要字色
 #define LY_COLOR_CINNABAR 0xC03A2B  // 朱砂
 #define LY_COLOR_GOLD    0xD9A441  // 鎏金

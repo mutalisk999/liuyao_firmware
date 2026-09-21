@@ -43,12 +43,14 @@ static const ly_page_ops_t *page_ops(ly_state_t state) {
 }
 
 void ly_style_option(lv_obj_t *panel, bool selected) {
-    lv_obj_set_style_bg_color(panel,
-        lv_color_hex(selected ? LY_COLOR_PANEL_2 : LY_COLOR_PANEL), 0);
+    // 浅色宣纸底 + 墨字(实测深底上默认黑字不可读,按反馈改为白底菜单)。
+    lv_obj_set_style_bg_color(panel, lv_color_hex(LY_COLOR_PAPER), 0);
     lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_text_color(panel,
+        lv_color_hex(selected ? LY_COLOR_CINNABAR : LY_COLOR_INK), 0);
     lv_obj_set_style_border_width(panel, selected ? 2 : 1, 0);
     lv_obj_set_style_border_color(panel,
-        lv_color_hex(selected ? LY_COLOR_CINNABAR : LY_COLOR_PANEL_2), 0);
+        lv_color_hex(selected ? LY_COLOR_CINNABAR : LY_COLOR_INK), 0);
     lv_obj_set_style_radius(panel, 6, 0);
 }
 
