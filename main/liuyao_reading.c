@@ -266,16 +266,31 @@ static int tendency_score(const liuyao_result_t *r) {
     return score;
 }
 
+// 结论页分类白话建议(不用术数词,普通人口吻;下标与 liuyao_category 对齐)。
+static const char *const k_plain_advice[LIUYAO_CAT_COUNT] = {
+    "不管问什么，先把最要紧的一件事定下来，其他事会跟着顺。",
+    "工作上的事，稳住手头的节奏，该争取就去争取，别自己吓自己。",
+    "钱的事急不来，看准了再出手，别把本钱放在不踏实的地方。",
+    "感情的事多沟通、少猜疑，心意到了，关系自然会缓和。",
+    "学习没有捷径，按计划一步步来，考试时放平心态就好。",
+    "出发前把行程和证件都核对好，路上稳一点，别赶时间。",
+    "家里的事，先把住的地方收拾顺当，家人之间多体谅。",
+    "打官司费心费力，能协商解决最好，不行就把证据准备齐全。",
+    "家里人之间多说说心里话，小事别计较，气氛好了事就顺。",
+};
+
 static void page_conclusion(const liuyao_result_t *r, appender_t *a) {
     const liuyao_analysis_t *an = &r->analysis;
     int score = tendency_score(r);
-    apf(a, "【结论】\n综合倾向:%s。\n",
-        score >= 2 ? "趋吉——用神得力，大局向好，宜把握时机推进。"
+    int category = an->category;
+    if (category < 0 || category >= LIUYAO_CAT_COUNT) category = 0;
+    apf(a, "【结论】\n综合来看:%s",
+        score >= 2 ? "事情比较顺，条件对你有利，想做的事可以放心去做。\n"
                    : score <= -2
-                         ? "偏滞——阻力偏重，时机未至，宜缓图守正，不宜强求。"
-                         : "中平——吉凶相参，成败系于作为与时机，宜稳中求进。");
-    apf(a, "%s\n", liuyao_category_focus(an->category));
-    apf(a, "六爻乃传统术数参考，吉凶在人，行止由己。\n");
+                         ? "眼下不太顺，阻力比较多，先别急着推进，缓一缓、稳一稳更好。\n"
+                         : "说不上好也说不上坏，关键看你自己的安排和时机抓得怎么样。\n");
+    apf(a, "%s\n", k_plain_advice[category]);
+    apf(a, "这些说法只是参考，事情最后怎么样，还得看你自己。\n");
 }
 
 void liuyao_compose_reading(const liuyao_result_t *result, const char *day_gz,

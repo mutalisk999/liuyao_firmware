@@ -7,6 +7,7 @@
 #include "liuyao_data.h"
 #include "liuyao_theme.h"
 
+
 // ---------------------------------------------------------------------------
 // 卦盘页
 // ---------------------------------------------------------------------------
@@ -126,12 +127,14 @@ static void reading_build(struct liyao_app_s *app) {
     lv_obj_remove_style_all(scroll);
     lv_obj_set_pos(scroll, 8, 42);
     lv_obj_set_size(scroll, 224, 218);
-    lv_obj_set_style_clip_corner(scroll, true, 0);
+    lv_obj_set_style_clip_corner(scroll, false, 0);
     lv_obj_set_scroll_dir(scroll, LV_DIR_VER);
-    lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_AUTO);
-    // 解读区:半透明墨面板 + 细边圆角,像一页摊开的册子。
+    // 滚动条关闭:滚动条显隐会反复触发无效化,与内容宽度依赖形成重绘循环。
+    // 本页用上下键滚动文本,不依赖滚动条提示。
+    lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_OFF);
+    // 解读区:墨面板 + 细边圆角,像一页摊开的册子(不透明,避免掩码图层)。
     lv_obj_set_style_bg_color(scroll, lv_color_hex(LY_COLOR_PANEL), 0);
-    lv_obj_set_style_bg_opa(scroll, LV_OPA_40, 0);
+    lv_obj_set_style_bg_opa(scroll, LV_OPA_COVER, 0);
     lv_obj_set_style_radius(scroll, 8, 0);
     lv_obj_set_style_border_width(scroll, 1, 0);
     lv_obj_set_style_border_color(scroll, lv_color_hex(LY_COLOR_PANEL_2), 0);
@@ -140,7 +143,7 @@ static void reading_build(struct liyao_app_s *app) {
     lv_obj_set_style_text_font(body, &liuyao_font_16, 0);
     lv_obj_set_style_text_color(body, lv_color_hex(LY_COLOR_PAPER), 0);
     lv_label_set_long_mode(body, LV_LABEL_LONG_WRAP);
-    lv_obj_set_width(body, 212);
+    lv_obj_set_width(body, 200);  // 固定宽度:不随滚动条/内容区变化,避免布局反馈循环
     lv_label_set_text(body, "");
     app->reading.scroll = scroll;
     app->reading.body = body;

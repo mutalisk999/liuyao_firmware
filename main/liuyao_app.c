@@ -223,9 +223,15 @@ static void app_task(void *arg) {
         if (xQueueReceive(app->queue, &event, pdMS_TO_TICKS(LY_BATTERY_POLL_MS)) ==
             pdTRUE) {
             // LVGL 非线程安全:页面重建/控件更新一律持锁。
+            // 拿不到锁说明 LVGL 任务没有让出(例如重绘卡死),此时事件会被丢弃;
+            // 连续失败时明确告警,避免问题表现为“按键毫无反应”而无任何日志。
+            static int lock_stall;
             if (bsp_lvgl_lock(500)) {
+                lock_stall = 0;
                 process_event(app, &event);
                 bsp_lvgl_unlock();
+            } else if (lock_stall++ == 2) {
+                ESP_LOGE(TAG, "LVGL 锁持续不可用,输入事件已开始丢弃");
             }
         } else {
             if (bsp_lvgl_lock(200)) {

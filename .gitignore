@@ -1,6 +1,8 @@
 build/
-build_*
-build_*/
+build_flash/
+build_flash*
+flash_log.txt
+flash.log
 sdkconfig
 sdkconfig.old
 managed_components/
