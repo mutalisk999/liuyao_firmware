@@ -11,24 +11,62 @@
 // ---------------------------------------------------------------------------
 // 封面
 // ---------------------------------------------------------------------------
+// 动画回调:透明度渐变(呼吸/闪烁)。对象删除时 LVGL 自动清理绑定动画。
+static void home_opa_anim(void *var, int32_t value) {
+    lv_obj_set_style_opa((lv_obj_t *)var, value, 0);
+}
+
 static void home_build(struct liyao_app_s *app) {
     app->screen = liuyao_page_create(NULL);
+
+    // 太极的舞台:鎏金光晕 + 呼吸金环。
+    lv_obj_t *halo = lv_obj_create(app->screen);
+    lv_obj_remove_style_all(halo);
+    lv_obj_set_size(halo, 148, 148);
+    lv_obj_set_pos(halo, 120 - 74, 108 - 74);
+    lv_obj_set_style_radius(halo, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_bg_color(halo, lv_color_hex(LY_COLOR_GOLD), 0);
+    lv_obj_set_style_bg_opa(halo, LV_OPA_10, 0);
+    lv_obj_t *breathe = liuyao_ring_create(app->screen, 120, 108, 64, 1,
+                                           LY_COLOR_GOLD, LV_OPA_40);
     liuyao_taiji_create(app->screen, 120, 108, 52);
+    lv_anim_t a;
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, breathe);
+    lv_anim_set_exec_cb(&a, home_opa_anim);
+    lv_anim_set_values(&a, LV_OPA_20, LV_OPA_70);
+    lv_anim_set_time(&a, 1500);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_start(&a);
+
     lv_obj_t *title = lv_label_create(app->screen);
     lv_obj_set_style_text_font(title, &liuyao_font_48, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(LY_COLOR_PAPER), 0);
     lv_label_set_text(title, "六爻");
     lv_obj_set_pos(title, 78, 176);
+
+    // 鎏金分隔线:两端金点,中间细线。
+    liuyao_hairline(app->screen, 64, 234, 112);
+    liuyao_rect_create(app->screen, 60, 233, 3, 3, LY_COLOR_GOLD);
+    liuyao_rect_create(app->screen, 177, 233, 3, 3, LY_COLOR_GOLD);
+
     lv_obj_t *subtitle = lv_label_create(app->screen);
     lv_obj_set_style_text_font(subtitle, &liuyao_font_16, 0);
     lv_obj_set_style_text_color(subtitle, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
     lv_label_set_text(subtitle, "文王纳甲 · 铜钱摇卦");
-    lv_obj_set_pos(subtitle, 58, 234);
-    lv_obj_t *hint = lv_label_create(app->screen);
-    lv_obj_set_style_text_font(hint, &liuyao_font_16, 0);
+    lv_obj_align(subtitle, LV_ALIGN_TOP_MID, 0, 244);
+
+    lv_obj_t *hint = liuyao_hint_create(app->screen, 276, "按 OK 开始起卦");
     lv_obj_set_style_text_color(hint, lv_color_hex(LY_COLOR_GOLD), 0);
-    lv_label_set_text(hint, "按 OK 开始起卦");
-    lv_obj_set_pos(hint, 66, 272);
+    lv_anim_init(&a);
+    lv_anim_set_var(&a, hint);
+    lv_anim_set_exec_cb(&a, home_opa_anim);
+    lv_anim_set_values(&a, LV_OPA_50, LV_OPA_COVER);
+    lv_anim_set_time(&a, 900);
+    lv_anim_set_path_cb(&a, lv_anim_path_ease_in_out);
+    lv_anim_set_repeat_count(&a, LV_ANIM_REPEAT_INFINITE);
+    lv_anim_start(&a);
 }
 
 static void home_key(struct liyao_app_s *app, bsp_btn_t btn, bsp_btn_ev_t ev) {
@@ -62,11 +100,7 @@ static void category_build(struct liyao_app_s *app) {
         lv_label_set_text(label, liuyao_category_label(i));
         app->category.cells[i] = panel;
     }
-    lv_obj_t *hint = lv_label_create(app->screen);
-    lv_obj_set_style_text_font(hint, &liuyao_font_16, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
-    lv_label_set_text(hint, "上下选择 · OK 确认");
-    lv_obj_set_pos(hint, 44, 236);
+    liuyao_hint_create(app->screen, 238, "上下选择 · OK 确认");
     app->sel = 0;
     grid_refresh(app, &app->category, LIUYAO_CAT_COUNT);
 }
@@ -105,11 +139,7 @@ static void perspective_build(struct liyao_app_s *app) {
         lv_label_set_text(label, liuyao_perspective_label(i));
         app->perspective.cells[i] = panel;
     }
-    lv_obj_t *hint = lv_label_create(app->screen);
-    lv_obj_set_style_text_font(hint, &liuyao_font_16, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
-    lv_label_set_text(hint, "男问妻财 · 女问官鬼");
-    lv_obj_set_pos(hint, 44, 226);
+    liuyao_hint_create(app->screen, 228, "男问妻财 · 女问官鬼");
     app->sel = LIUYAO_PERSP_UNSPECIFIED;
     grid_refresh(app, &app->perspective, LIUYAO_PERSP_FEMALE + 1);
 }
@@ -141,11 +171,17 @@ static const char *const k_date_title[LY_DATE_FIELD_COUNT] = {"年", "月", "日
 static void date_refresh(struct liyao_app_s *app) {
     int values[LY_DATE_FIELD_COUNT] = {app->year, app->month, app->day, app->hour};
     for (int i = 0; i < LY_DATE_FIELD_COUNT; i++) {
+        bool active = i == app->date_field;
         lv_label_set_text_fmt(app->date.values[i], "%d", values[i]);
         lv_obj_set_style_text_color(app->date.values[i],
-            lv_color_hex(i == app->date_field ? LY_COLOR_GOLD : LY_COLOR_PAPER), 0);
+            lv_color_hex(active ? LY_COLOR_GOLD : LY_COLOR_PAPER), 0);
         lv_obj_set_style_text_color(app->date.titles[i],
-            lv_color_hex(i == app->date_field ? LY_COLOR_GOLD : LY_COLOR_PAPER_DIM), 0);
+            lv_color_hex(active ? LY_COLOR_GOLD : LY_COLOR_PAPER_DIM), 0);
+        // 选中字段下的鎏金短横标记。
+        lv_obj_set_style_bg_color(app->date.marks[i],
+            lv_color_hex(active ? LY_COLOR_GOLD : LY_COLOR_PANEL_2), 0);
+        lv_obj_set_style_bg_opa(app->date.marks[i],
+            active ? LV_OPA_COVER : LV_OPA_40, 0);
     }
 }
 
@@ -175,12 +211,11 @@ static void date_build(struct liyao_app_s *app) {
         lv_obj_set_style_text_font(value, &liuyao_font_24, 0);
         lv_obj_set_pos(value, k_field_x[i], 140);
         app->date.values[i] = value;
+        app->date.marks[i] = liuyao_rect_create(app->screen, k_field_x[i], 172,
+                                                24, 3, LY_COLOR_PANEL_2);
+        lv_obj_set_style_bg_opa(app->date.marks[i], LV_OPA_40, 0);
     }
-    lv_obj_t *hint = lv_label_create(app->screen);
-    lv_obj_set_style_text_font(hint, &liuyao_font_16, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
-    lv_label_set_text(hint, "上下调整 · OK 下一项");
-    lv_obj_set_pos(hint, 40, 212);
+    liuyao_hint_create(app->screen, 214, "上下调整 · OK 下一项");
     app->date_field = 0;
     date_refresh(app);
 }
@@ -229,11 +264,7 @@ static void method_build(struct liyao_app_s *app) {
         lv_label_set_text(label, k_options[i]);
         app->perspective.cells[i] = panel;  // 复用通用网格部件
     }
-    lv_obj_t *hint = lv_label_create(app->screen);
-    lv_obj_set_style_text_font(hint, &liuyao_font_16, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
-    lv_label_set_text(hint, "已有铜钱结果请选手动录爻");
-    lv_obj_set_pos(hint, 28, 212);
+    liuyao_hint_create(app->screen, 214, "已有铜钱结果请选手动录爻");
     app->sel = 0;
     grid_refresh(app, &app->perspective, 2);
 }

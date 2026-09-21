@@ -12,6 +12,13 @@
 // ---------------------------------------------------------------------------
 static void chart_row(struct liyao_app_s *app, int line_index, int y) {
     const liuyao_line_t *l = &app->result.chart.lines[line_index];
+    if (l->moving) {
+        // 动爻行朱砂暗晕:让变化一眼可辨。
+        lv_obj_t *tint = liuyao_rect_create(app->screen, 6, y - 3, 228, 24,
+                                            LY_COLOR_TINT);
+        lv_obj_set_style_radius(tint, 4, 0);
+    }
+
     lv_obj_t *spirit = lv_label_create(app->screen);
     lv_obj_set_style_text_font(spirit, &liuyao_font_16, 0);
     lv_obj_set_style_text_color(spirit, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
@@ -47,6 +54,12 @@ static void chart_build(struct liyao_app_s *app) {
     app->screen = liuyao_page_create("卦盘");
     const liuyao_chart_t *c = &app->result.chart;
 
+    // 卦盘整体入框:墨色面板 + 细边,与页面底区分。
+    lv_obj_t *panel = liuyao_rect_create(app->screen, 4, 80, 232, 172,
+                                         LY_COLOR_PANEL);
+    lv_obj_set_style_border_width(panel, 1, 0);
+    lv_obj_set_style_border_color(panel, lv_color_hex(LY_COLOR_PANEL_2), 0);
+
     lv_obj_t *info = lv_label_create(app->screen);
     lv_obj_set_style_text_font(info, &liuyao_font_16, 0);
     lv_obj_set_style_text_color(info, lv_color_hex(LY_COLOR_GOLD), 0);
@@ -76,11 +89,14 @@ static void chart_build(struct liyao_app_s *app) {
         chart_row(app, i, 88 + (LIUYAO_LINE_COUNT - 1 - i) * 28);
     }
 
+    // 本卦 | 变卦 分界线(置于爻行之上,不被动爻暗晕截断)。
+    liuyao_rect_create(app->screen, 178, 92, 1, 150, LY_COLOR_PANEL_2);
+
     lv_obj_t *footer = lv_label_create(app->screen);
     lv_obj_set_style_text_font(footer, &liuyao_font_16, 0);
     lv_obj_set_style_text_color(footer, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
     lv_label_set_text(footer, "OK 解读 · 长按回封面");
-    lv_obj_set_pos(footer, 32, 268);
+    lv_obj_align(footer, LV_ALIGN_TOP_MID, 0, 268);
 }
 
 static void chart_key(struct liyao_app_s *app, bsp_btn_t btn, bsp_btn_ev_t ev) {
@@ -113,6 +129,13 @@ static void reading_build(struct liyao_app_s *app) {
     lv_obj_set_style_clip_corner(scroll, true, 0);
     lv_obj_set_scroll_dir(scroll, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(scroll, LV_SCROLLBAR_MODE_AUTO);
+    // 解读区:半透明墨面板 + 细边圆角,像一页摊开的册子。
+    lv_obj_set_style_bg_color(scroll, lv_color_hex(LY_COLOR_PANEL), 0);
+    lv_obj_set_style_bg_opa(scroll, LV_OPA_40, 0);
+    lv_obj_set_style_radius(scroll, 8, 0);
+    lv_obj_set_style_border_width(scroll, 1, 0);
+    lv_obj_set_style_border_color(scroll, lv_color_hex(LY_COLOR_PANEL_2), 0);
+    lv_obj_set_style_pad_all(scroll, 6, 0);
     lv_obj_t *body = lv_label_create(scroll);
     lv_obj_set_style_text_font(body, &liuyao_font_16, 0);
     lv_obj_set_style_text_color(body, lv_color_hex(LY_COLOR_PAPER), 0);
@@ -129,11 +152,7 @@ static void reading_build(struct liyao_app_s *app) {
     lv_obj_set_pos(page_label, 150, 8);  // 电量在右上角,页码左移避开
     app->reading.page_label = page_label;
 
-    lv_obj_t *hint = lv_label_create(app->screen);
-    lv_obj_set_style_text_font(hint, &liuyao_font_16, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
-    lv_label_set_text(hint, "OK 下一页 · 长按回封面");
-    lv_obj_set_pos(hint, 44, 266);
+    liuyao_hint_create(app->screen, 266, "OK 下一页 · 长按回封面");
     app->reading_page = 0;
     reading_show(app);
 }

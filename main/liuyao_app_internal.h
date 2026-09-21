@@ -49,6 +49,7 @@ typedef struct {
 typedef struct {
     lv_obj_t *values[LY_DATE_FIELD_COUNT];
     lv_obj_t *titles[LY_DATE_FIELD_COUNT];
+    lv_obj_t *marks[LY_DATE_FIELD_COUNT];  // 选中字段下的鎏金短横
 } ly_date_widgets_t;
 
 // 卦盘页部件(行部件由 build 直接创建,不保留句柄)。

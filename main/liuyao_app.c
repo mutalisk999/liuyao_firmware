@@ -43,15 +43,29 @@ static const ly_page_ops_t *page_ops(ly_state_t state) {
 }
 
 void ly_style_option(lv_obj_t *panel, bool selected) {
-    // 浅色宣纸底 + 墨字(实测深底上默认黑字不可读,按反馈改为白底菜单)。
-    lv_obj_set_style_bg_color(panel, lv_color_hex(LY_COLOR_PAPER), 0);
-    lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
-    lv_obj_set_style_text_color(panel,
-        lv_color_hex(selected ? LY_COLOR_CINNABAR : LY_COLOR_INK), 0);
-    lv_obj_set_style_border_width(panel, selected ? 2 : 1, 0);
-    lv_obj_set_style_border_color(panel,
-        lv_color_hex(selected ? LY_COLOR_CINNABAR : LY_COLOR_INK), 0);
-    lv_obj_set_style_radius(panel, 6, 0);
+    // 选中:宣纸底 + 朱砂字与描边 + 投影浮起;未选中:墨底面板 + 宣纸字。
+    // (深底上默认黑字不可读,故未选中态显式用宣纸字色。)
+    if (selected) {
+        lv_obj_set_style_bg_color(panel, lv_color_hex(LY_COLOR_PAPER), 0);
+        lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+        lv_obj_set_style_text_color(panel, lv_color_hex(LY_COLOR_CINNABAR), 0);
+        lv_obj_set_style_border_width(panel, 2, 0);
+        lv_obj_set_style_border_color(panel, lv_color_hex(LY_COLOR_CINNABAR), 0);
+        lv_obj_set_style_radius(panel, 6, 0);
+        lv_obj_set_style_shadow_color(panel, lv_color_hex(LY_COLOR_CINNABAR), 0);
+        lv_obj_set_style_shadow_opa(panel, LV_OPA_40, 0);
+        lv_obj_set_style_shadow_width(panel, 10, 0);
+        lv_obj_set_style_shadow_spread(panel, 1, 0);
+    } else {
+        lv_obj_set_style_bg_color(panel, lv_color_hex(LY_COLOR_PANEL), 0);
+        lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+        lv_obj_set_style_text_color(panel, lv_color_hex(LY_COLOR_PAPER), 0);
+        lv_obj_set_style_border_width(panel, 1, 0);
+        lv_obj_set_style_border_color(panel, lv_color_hex(LY_COLOR_PANEL_2), 0);
+        lv_obj_set_style_radius(panel, 6, 0);
+        lv_obj_set_style_shadow_width(panel, 0, 0);
+        lv_obj_set_style_shadow_opa(panel, LV_OPA_TRANSP, 0);
+    }
 }
 
 int ly_days_in_month_clamped(int year, int month, int day) {
@@ -152,12 +166,12 @@ static void enter_state(struct liyao_app_s *app, ly_state_t state) {
     if (ops && ops->build) {
         ops->build(app);
     }
-    // 规范默认位:页面右上角电量。
+    // 规范默认位:页面右上角电量(左移避开四角角饰)。
     if (app->screen) {
         app->battery = lv_label_create(app->screen);
         lv_obj_set_style_text_font(app->battery, &liuyao_font_16, 0);
         lv_obj_set_style_text_color(app->battery, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
-        lv_obj_set_pos(app->battery, 202, 8);
+        lv_obj_set_pos(app->battery, 182, 10);
         refresh_battery(app);
         lv_screen_load(app->screen);
     }

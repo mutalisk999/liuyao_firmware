@@ -133,11 +133,21 @@ static void cast_build(struct liyao_app_s *app) {
         lv_obj_set_style_bg_opa(coin, LV_OPA_COVER, 0);
         lv_obj_set_style_border_width(coin, 2, 0);
         lv_obj_set_style_border_color(coin, lv_color_hex(LY_COLOR_GOLD), 0);
-        lv_obj_t *face = lv_label_create(coin);
+        lv_obj_t *face = lv_label_create(coin);  // 保持为 child 0:cast_set_coin 依赖
         lv_obj_set_style_text_font(face, &liuyao_font_24, 0);
         lv_obj_set_style_text_color(face, lv_color_hex(LY_COLOR_PAPER), 0);
         lv_obj_center(face);
         lv_label_set_text(face, "?");
+        // 内环:双圈铜钱的金属质感(仅描边,不遮字)。
+        lv_obj_t *inner = lv_obj_create(coin);
+        lv_obj_remove_style_all(inner);
+        lv_obj_set_size(inner, 40, 40);
+        lv_obj_center(inner);
+        lv_obj_set_style_radius(inner, LV_RADIUS_CIRCLE, 0);
+        lv_obj_set_style_bg_opa(inner, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(inner, 1, 0);
+        lv_obj_set_style_border_color(inner, lv_color_hex(LY_COLOR_GOLD), 0);
+        lv_obj_set_style_border_opa(inner, LV_OPA_50, 0);
         app->cast.coins[i] = coin;
         app->cast.coin_text[i] = face;
     }
@@ -146,24 +156,25 @@ static void cast_build(struct liyao_app_s *app) {
     lv_obj_set_style_text_font(app->cast.result_label, &liuyao_font_24, 0);
     lv_obj_set_style_text_color(app->cast.result_label,
                                 lv_color_hex(LY_COLOR_PAPER), 0);
-    lv_obj_set_pos(app->cast.result_label, 62, 164);
+    lv_obj_align(app->cast.result_label, LV_ALIGN_TOP_MID, 0, 166);
     lv_label_set_text(app->cast.result_label, "");  // 清掉 LVGL 默认的 "Text"
 
-    // 右侧六爻进度(上爻在上,初爻在下);置于"第N爻"标题之下避免重叠。
+    // 右侧六爻进度(上爻在上,初爻在下)收进面板,与铜钱区形成分区。
+    // 面板 x>=198:给第三枚铜钱(右缘 196)留出间隙,避免遮挡。
+    lv_obj_t *progress_panel = liuyao_rect_create(app->screen, 198, 84, 40, 154,
+                                                  LY_COLOR_PANEL);
+    lv_obj_set_style_border_width(progress_panel, 1, 0);
+    lv_obj_set_style_border_color(progress_panel, lv_color_hex(LY_COLOR_PANEL_2), 0);
     for (int i = 0; i < LIUYAO_LINE_COUNT; i++) {
         lv_obj_t *slot = lv_obj_create(app->screen);
         lv_obj_remove_style_all(slot);
         lv_obj_set_size(slot, 26, 20);
-        lv_obj_set_pos(slot, 196, 92 + (LIUYAO_LINE_COUNT - 1 - i) * 24);
+        lv_obj_set_pos(slot, 201, 92 + (LIUYAO_LINE_COUNT - 1 - i) * 24);
         app->cast.progress[i] = slot;
     }
 
-    lv_obj_t *hint = lv_label_create(app->screen);
-    lv_obj_set_style_text_font(hint, &liuyao_font_16, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
-    lv_label_set_text(hint, "OK 摇卦 · 长按返回");
-    lv_obj_set_pos(hint, 48, 262);
-    app->cast.hint_label = hint;
+    app->cast.hint_label = liuyao_hint_create(app->screen, 264,
+                                              "OK 摇卦 · 长按返回");
 
     cast_show_progress(app);
     cast_refresh_header(app);
@@ -221,6 +232,8 @@ static void manual_refresh(struct liyao_app_s *app) {
             lv_color_hex(selected ? LY_COLOR_PANEL_2 : LY_COLOR_PANEL), 0);
         lv_obj_set_style_border_color(row,
             lv_color_hex(selected ? LY_COLOR_CINNABAR : LY_COLOR_PANEL_2), 0);
+        lv_obj_set_style_text_color(label,
+            lv_color_hex(selected ? LY_COLOR_PAPER : LY_COLOR_PAPER_DIM), 0);
     }
 }
 
@@ -245,11 +258,7 @@ static void manual_build(struct liyao_app_s *app) {
         lv_label_set_text(label, "");
         app->manual.rows[i] = row;
     }
-    lv_obj_t *hint = lv_label_create(app->screen);
-    lv_obj_set_style_text_font(hint, &liuyao_font_16, 0);
-    lv_obj_set_style_text_color(hint, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
-    lv_label_set_text(hint, "上下换值 · OK 下爻");
-    lv_obj_set_pos(hint, 48, 258);
+    liuyao_hint_create(app->screen, 258, "上下换值 · OK 下爻");
     manual_refresh(app);
 }
 

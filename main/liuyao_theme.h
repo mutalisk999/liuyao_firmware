@@ -5,14 +5,17 @@
 #include "lvgl.h"
 
 // 墨夜 + 宣纸 + 朱砂 + 鎏金的玄学配色。
-#define LY_COLOR_BG      0x14121A  // 玄墨底
+#define LY_COLOR_BG      0x14121A  // 玄墨底(页面上部)
+#define LY_COLOR_BG_2    0x0F0D15  // 玄墨底(页面下部,纵向渐变)
 #define LY_COLOR_PANEL   0x201D2B  // 面板
 #define LY_COLOR_PANEL_2 0x2A2638  // 面板高亮
+#define LY_COLOR_TINT    0x2E1B1A  // 朱砂暗晕(动爻行底色)
 #define LY_COLOR_PAPER   0xEDE3D0  // 宣纸字色
 #define LY_COLOR_INK     0x232030  // 墨字(浅底上的正文字色)
 #define LY_COLOR_PAPER_DIM 0x9A90A6  // 次要字色
 #define LY_COLOR_CINNABAR 0xC03A2B  // 朱砂
 #define LY_COLOR_GOLD    0xD9A441  // 鎏金
+#define LY_COLOR_GOLD_DIM 0x8A6D2F // 暗金(角饰、装饰线)
 #define LY_COLOR_YANG    0xEDE3D0  // 阳爻
 #define LY_COLOR_YIN     0x6B637E  // 阴爻
 
@@ -33,3 +36,22 @@ lv_obj_t *liuyao_yao_create(lv_obj_t *parent, int x, int y, int width,
 
 // 简化太极图(装饰):圆盘 + 双鱼 + 两点,纯 lv_obj 几何拼装。
 lv_obj_t *liuyao_taiji_create(lv_obj_t *parent, int cx, int cy, int radius);
+
+// —— 通用装饰组件 ——
+
+// 纯色矩形(去默认样式,圆角 2)。
+lv_obj_t *liuyao_rect_create(lv_obj_t *parent, int x, int y, int w, int h,
+                             uint32_t color);
+
+// 水平细分隔线(1px,面板高亮色)。
+lv_obj_t *liuyao_hairline(lv_obj_t *parent, int x, int y, int w);
+
+// 空心圆环(装饰用,如太极外圈的呼吸金环)。
+lv_obj_t *liuyao_ring_create(lv_obj_t *parent, int cx, int cy, int radius,
+                             int width, uint32_t color, lv_opa_t opa);
+
+// 页面四角暗金角饰(低透明度,营造卷轴边框氛围)。
+void liuyao_corner_ornaments(lv_obj_t *parent);
+
+// 底部操作提示行:统一字体/颜色,水平居中于 y。
+lv_obj_t *liuyao_hint_create(lv_obj_t *parent, int y, const char *text);
