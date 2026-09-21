@@ -15,6 +15,17 @@
 - 添加字库前评估 Flash 与内部 RAM 影响；ESP32-C3 无 PSRAM。
 - 不提交许可不允许分发的字库。
 
+| 文件 | 规模与覆盖 | 用途、来源与许可 |
+| --- | --- | --- |
+| [`fonts/NotoSansSC-Regular.otf`](fonts/NotoSansSC-Regular.otf) | Noto Sans SC Regular 的 SC 子集 OpenType/CFF | 六爻应用字库的源字体。来源：[notofonts/noto-cjk](https://github.com/notofonts/noto-cjk)（`Sans/SubsetOTF/SC`），SIL Open Font License 1.1，允许再分发。 |
+| [`fonts/liuyao-symbols.txt`](fonts/liuyao-symbols.txt) | 六爻 UI 字符清单（ASCII + 约 660 个中文） | 由 [`tools/gen_liuyao_font_symbols.py`](../tools/gen_liuyao_font_symbols.py) 从应用源码提取，是 16/24px 字库的覆盖契约；文案变更后须重新生成字库。 |
+| [`fonts/liuyao-symbols-cover.txt`](fonts/liuyao-symbols-cover.txt) | 仅封面大字字符 | 48px 封面子集的输入。 |
+| [`fonts/liuyao_font_16.c`](fonts/liuyao_font_16.c)、[`fonts/liuyao_font_24.c`](fonts/liuyao_font_24.c)、[`fonts/liuyao_font_48.c`](fonts/liuyao_font_48.c) | LVGL C 源码，4bpp，未压缩 | 应用字体 `liuyao_font_16` / `liuyao_font_24` / `liuyao_font_48`（正文/标题/封面），由 [`tools/gen_liuyao_fonts.sh`](../tools/gen_liuyao_fonts.sh)（`lv_font_conv`，`--no-compress`）生成，经 `main/CMakeLists.txt` 编入 `main` 组件；用 `LV_FONT_DECLARE` 声明并在控件上显式选择。 |
+
+再生成流程：改 UI 文案 → `python tools/gen_liuyao_font_symbols.py` →
+`./tools/gen_liuyao_fonts.sh`（需要 `node`/`npx`）→ 重新编译固件。48px 子集
+只覆盖封面标题；其他字号显示的文案必须落在 `liuyao-symbols.txt` 内。
+
 ## 图片（images）
 
 可复用的源图与生成的显示资产放在 `images/`。

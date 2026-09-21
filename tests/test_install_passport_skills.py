@@ -29,6 +29,7 @@ class InstallPassportSkillsTest(unittest.TestCase):
         temporary = tempfile.TemporaryDirectory(prefix="ai-passport-skill-tests-")
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name).resolve()
+        self.skip_without_symlink_privilege()
         root_patch = patch.object(INSTALLER, "ROOT", self.root)
         root_patch.start()
         self.addCleanup(root_patch.stop)
@@ -36,6 +37,25 @@ class InstallPassportSkillsTest(unittest.TestCase):
             source = self.root / "skills" / name
             source.mkdir(parents=True)
             (source / "SKILL.md").write_text(f"# {name}\n", encoding="utf-8")
+
+    def skip_without_symlink_privilege(self) -> None:
+        """The installer creates directory symlinks; probe before asserting."""
+        probe_parent = self.root / "skills"
+        probe_parent.mkdir(parents=True, exist_ok=True)
+        probe = probe_parent / ".link-probe"
+        try:
+            probe.symlink_to(self.root, target_is_directory=True)
+        except NotImplementedError:
+            raise unittest.SkipTest("This platform does not support symlinks")
+        except OSError as error:
+            if getattr(error, "winerror", None) == 1314:
+                raise unittest.SkipTest(
+                    "Windows symlink tests require Developer Mode or elevation"
+                )
+            raise
+        finally:
+            with contextlib.suppress(OSError):
+                probe.unlink()
 
     def run_installer(self, *args: str) -> tuple[int, str, str]:
         with (

@@ -154,8 +154,9 @@ static void sleep_task(void *arg)
 
             char text[128];
             if (err == ESP_OK) {
-                snprintf(text, sizeof(text), "LIGHT WAKE: TIMER\nSlept: %lld ms",
-                         (long long)slept_ms);
+                // unsigned long + %lu:主机(MinGW)与 ESP-IDF(newlib)通用。
+                snprintf(text, sizeof(text), "LIGHT WAKE: TIMER\nSlept: %lu ms",
+                         (unsigned long)slept_ms);
             } else {
                 snprintf(text, sizeof(text), "%s failed:\n%s", failure, esp_err_to_name(err));
                 ESP_LOGE(TAG, "%s 失败: %s", failure, esp_err_to_name(err));

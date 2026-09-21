@@ -30,6 +30,70 @@ void lv_label_set_text(lv_obj_t *object, const char *text) {
     (void)object;
     snprintf(test_status, sizeof(test_status), "%s", text);
 }
+// Minimal LVGL/ui_pixel no-ops completing the prototypes in
+// demo_test_stubs.h and main/ui_pixel.h. Linux ELF links relied on
+// --gc-sections discarding UI-building demo sections; MinGW PE keeps more
+// of them, so the stub surface must be complete enough to link everywhere.
+void lv_label_set_text_fmt(lv_obj_t *object, const char *format, ...) {
+    (void)object; (void)format;
+}
+void lv_label_set_long_mode(lv_obj_t *object, int mode) { (void)object; (void)mode; }
+lv_obj_t *lv_obj_create(lv_obj_t *parent) { (void)parent; return 0; }
+lv_obj_t *lv_label_create(lv_obj_t *parent) { (void)parent; return 0; }
+void lv_obj_delete(lv_obj_t *object) { (void)object; }
+void lv_obj_align(lv_obj_t *object, int align, int x, int y) {
+    (void)object; (void)align; (void)x; (void)y;
+}
+void lv_obj_center(lv_obj_t *object) { (void)object; }
+void lv_obj_set_size(lv_obj_t *object, int width, int height) {
+    (void)object; (void)width; (void)height;
+}
+void lv_obj_set_width(lv_obj_t *object, int width) { (void)object; (void)width; }
+void lv_obj_set_style_bg_color(lv_obj_t *object, uint32_t color, int selector) {
+    (void)object; (void)color; (void)selector;
+}
+void lv_obj_set_style_border_width(lv_obj_t *object, int width, int selector) {
+    (void)object; (void)width; (void)selector;
+}
+void lv_obj_set_style_radius(lv_obj_t *object, int radius, int selector) {
+    (void)object; (void)radius; (void)selector;
+}
+void lv_obj_set_style_text_align(lv_obj_t *object, int align, int selector) {
+    (void)object; (void)align; (void)selector;
+}
+void lv_obj_set_style_text_color(lv_obj_t *object, uint32_t color, int selector) {
+    (void)object; (void)color; (void)selector;
+}
+void lv_obj_set_style_text_font(lv_obj_t *object, const lv_font_t *font, int selector) {
+    (void)object; (void)font; (void)selector;
+}
+uint32_t lv_color_hex(uint32_t color) { return color; }
+void lv_screen_load(lv_obj_t *screen) { (void)screen; }
+lv_timer_t *lv_timer_create(void (*callback)(lv_timer_t *), unsigned period,
+                             void *data) {
+    (void)callback; (void)period; (void)data;
+    return 0;
+}
+void lv_timer_delete(lv_timer_t *timer) { (void)timer; }
+lv_obj_t *ui_pixel_screen_create(const char *title) { (void)title; return 0; }
+lv_obj_t *ui_pixel_panel_create(lv_obj_t *parent, int x, int y, int width,
+                                int height, uint32_t color) {
+    (void)parent; (void)x; (void)y; (void)width; (void)height; (void)color;
+    return 0;
+}
+lv_obj_t *ui_pixel_mascot_create(lv_obj_t *parent, int x, int y) {
+    (void)parent; (void)x; (void)y;
+    return 0;
+}
+int esp_sleep_get_wakeup_cause(void) { return 0; }
+esp_err_t esp_wifi_scan_get_ap_num(uint16_t *count) {
+    (void)count;
+    return ESP_OK;
+}
+esp_err_t esp_wifi_scan_get_ap_records(uint16_t *count, wifi_ap_record_t *records) {
+    (void)count; (void)records;
+    return ESP_OK;
+}
 void bsp_display_backlight(uint8_t percent) { (void)percent; }
 void ui_pixel_mascot_jump(lv_obj_t *mascot) { (void)mascot; }
 void ui_pixel_set_selected(lv_obj_t *panel, bool selected, bool enabled) {

@@ -1,0 +1,259 @@
+// main/liuyao_app.c —— 六爻应用主任务:按键队列、页面切换、起卦数据准备。
+// 运行模型沿用仓库基线:按键回调只入队;本任务在 bsp_lvgl_lock 下操作 LVGL。
+#include "liuyao_app.h"
+
+#include <stdio.h>
+#include <string.h>
+
+#include "bsp_battery.h"
+#include "bsp_display.h"
+#include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+#include "liuyao_app_internal.h"
+#include "liuyao_calendar.h"
+#include "liuyao_theme.h"
+#include "nvs.h"
+
+static const char *TAG = "liuyao";
+
+#define LY_INPUT_QUEUE_DEPTH 8
+#define LY_BATTERY_POLL_MS 6000
+#define LY_NVS_NAMESPACE "liuyao"
+#define LY_NVS_KEY_DATE "last_date"
+
+typedef struct {
+    bsp_btn_t btn;
+    bsp_btn_ev_t ev;
+} ly_input_event_t;
+
+// 队列唤醒标记:定时器回调发起切页后叫醒应用任务(事件本身无按键语义)。
+#define LY_EV_WAKE ((bsp_btn_ev_t)-1)
+
+static struct liyao_app_s s_app;
+static ly_state_t s_next_state;
+static QueueHandle_t s_queue;
+
+static const ly_page_ops_t *page_ops(ly_state_t state) {
+    const ly_page_ops_t *ops = liuyao_page_ops_flow(state);
+    if (!ops) ops = liuyao_page_ops_cast(state);
+    if (!ops) ops = liuyao_page_ops_result(state);
+    return ops;
+}
+
+void ly_style_option(lv_obj_t *panel, bool selected) {
+    lv_obj_set_style_bg_color(panel,
+        lv_color_hex(selected ? LY_COLOR_PANEL_2 : LY_COLOR_PANEL), 0);
+    lv_obj_set_style_bg_opa(panel, LV_OPA_COVER, 0);
+    lv_obj_set_style_border_width(panel, selected ? 2 : 1, 0);
+    lv_obj_set_style_border_color(panel,
+        lv_color_hex(selected ? LY_COLOR_CINNABAR : LY_COLOR_PANEL_2), 0);
+    lv_obj_set_style_radius(panel, 6, 0);
+}
+
+int ly_days_in_month_clamped(int year, int month, int day) {
+    int dim = liuyao_days_in_month(year, month);
+    if (day > dim) return dim;
+    return day < 1 ? 1 : day;
+}
+
+void ly_app_default_date(struct liyao_app_s *app) {
+    // 首次启动:取编译日期(与发布时间接近),之后由 NVS 记忆上次输入。
+    static const char *const k_months[12] = {
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    };
+    char month[4] = {0};
+    int day = 1;
+    int year = 2026;
+    sscanf(__DATE__, "%3s %d %d", month, &day, &year);
+    int month_index = 0;
+    for (int i = 0; i < 12; i++) {
+        if (strncmp(month, k_months[i], 3) == 0) month_index = i + 1;
+    }
+    app->year = year >= 2020 && year <= 2040 ? year : 2026;
+    app->month = month_index >= 1 && month_index <= 12 ? month_index : 1;
+    app->day = day >= 1 && day <= 31 ? day : 1;
+    app->hour = 12;
+}
+
+bool ly_app_load_last_date(struct liyao_app_s *app) {
+    nvs_handle_t handle;
+    if (nvs_open(LY_NVS_NAMESPACE, NVS_READONLY, &handle) != ESP_OK) return false;
+    int32_t packed[4];
+    size_t size = sizeof(packed);
+    bool ok = nvs_get_blob(handle, LY_NVS_KEY_DATE, packed, &size) == ESP_OK &&
+              size == sizeof(packed);
+    nvs_close(handle);
+    if (!ok) return false;
+    if (packed[0] < 2020 || packed[0] > 2040) return false;
+    app->year = packed[0];
+    app->month = packed[1];
+    app->day = packed[2];
+    app->hour = packed[3];
+    return true;
+}
+
+void ly_app_save_last_date(const struct liyao_app_s *app) {
+    nvs_handle_t handle;
+    if (nvs_open(LY_NVS_NAMESPACE, NVS_READWRITE, &handle) != ESP_OK) return;
+    int32_t packed[4] = {app->year, app->month, app->day, app->hour};
+    if (nvs_set_blob(handle, LY_NVS_KEY_DATE, packed, sizeof(packed)) == ESP_OK) {
+        nvs_commit(handle);
+    }
+    nvs_close(handle);
+}
+
+static void refresh_battery(struct liyao_app_s *app) {
+    if (app->battery) {
+        liuyao_battery_update(app->battery, bsp_battery_soc());
+    }
+}
+
+// 依据 casting(爻值+类别+视角)与所选时间计算历法事实与卦象。
+void ly_app_cast_lines_to_result(struct liyao_app_s *app) {
+    liuyao_date_facts_t facts;
+    if (!liuyao_date_facts(app->year, app->month, app->day, app->hour, &facts)) {
+        ESP_LOGE(TAG, "起卦时间不受支持: %d-%d-%d %d时", app->year, app->month,
+                 app->day, app->hour);
+        app->casting_valid = false;
+        return;
+    }
+    app->casting.day_index = facts.day_index;
+    app->casting.month_branch = facts.month_branch;
+    snprintf(app->day_gz, sizeof(app->day_gz), "%s%s",
+             liuyao_stem_str(facts.day_index % 10),
+             liuyao_branch_str(facts.day_index % 12));
+    snprintf(app->month_gz, sizeof(app->month_gz), "%s%s",
+             liuyao_stem_str(facts.month_stem),
+             liuyao_branch_str(facts.month_branch));
+    if (!liuyao_cast(&app->casting, &app->result)) {
+        ESP_LOGE(TAG, "排盘失败");
+        app->casting_valid = false;
+        return;
+    }
+    app->casting_valid = true;
+}
+
+// 切页请求:仅置位,实际删屏重建在本轮锁内完成(见 process_event)。
+void ly_app_goto(struct liyao_app_s *app, ly_state_t next) {
+    s_next_state = next;
+    app->switch_requested = true;
+}
+
+static void enter_state(struct liyao_app_s *app, ly_state_t state) {
+    app->state = state;
+    app->screen = NULL;
+    app->battery = NULL;
+    const ly_page_ops_t *ops = page_ops(state);
+    if (ops && ops->build) {
+        ops->build(app);
+    }
+    // 规范默认位:页面右上角电量。
+    if (app->screen) {
+        app->battery = lv_label_create(app->screen);
+        lv_obj_set_style_text_font(app->battery, &liuyao_font_16, 0);
+        lv_obj_set_style_text_color(app->battery, lv_color_hex(LY_COLOR_PAPER_DIM), 0);
+        lv_obj_set_pos(app->battery, 202, 8);
+        refresh_battery(app);
+        lv_screen_load(app->screen);
+    }
+}
+
+static void apply_switch(struct liyao_app_s *app) {
+    ly_state_t next = s_next_state;
+    app->switch_requested = false;
+    const ly_page_ops_t *ops = page_ops(app->state);
+    if (ops && ops->exit) {
+        ops->exit(app);
+    }
+    if (app->screen) {
+        lv_obj_delete(app->screen);
+        app->screen = NULL;
+        app->battery = NULL;
+    }
+    enter_state(app, next);
+}
+
+static void process_event(struct liyao_app_s *app, const ly_input_event_t *event) {
+    if (event->ev == LY_EV_WAKE) {
+        if (app->switch_requested) {
+            apply_switch(app);
+        }
+        return;
+    }
+    if (app->switch_requested) return;  // 切页后丢弃滞后的按键
+    const ly_page_ops_t *ops = page_ops(app->state);
+    if (ops && ops->key) {
+        ops->key(app, event->btn, event->ev);
+    }
+    if (app->switch_requested) {
+        apply_switch(app);
+    }
+}
+
+void ly_app_notify(struct liyao_app_s *app) {
+    if (app->queue) {
+        const ly_input_event_t wake = {.btn = BSP_BTN_UP, .ev = LY_EV_WAKE};
+        (void)xQueueSend(app->queue, &wake, 0);
+    }
+}
+
+static void app_task(void *arg) {
+    struct liyao_app_s *app = (struct liyao_app_s *)arg;
+    ly_input_event_t event;
+    for (;;) {
+        if (xQueueReceive(app->queue, &event, pdMS_TO_TICKS(LY_BATTERY_POLL_MS)) ==
+            pdTRUE) {
+            // LVGL 非线程安全:页面重建/控件更新一律持锁。
+            if (bsp_lvgl_lock(500)) {
+                process_event(app, &event);
+                bsp_lvgl_unlock();
+            }
+        } else {
+            if (bsp_lvgl_lock(200)) {
+                refresh_battery(app);
+                bsp_lvgl_unlock();
+            }
+        }
+    }
+}
+
+// 按键回调运行在共享 esp_timer 任务:只入队,立即返回。
+static void on_key(bsp_btn_t btn, bsp_btn_ev_t ev, void *user) {
+    (void)user;
+    const ly_input_event_t event = {.btn = btn, .ev = ev};
+    (void)xQueueSend(s_queue, &event, 0);
+}
+
+void liuyao_app_start(void) {
+    memset(&s_app, 0, sizeof(s_app));
+    if (!ly_app_load_last_date(&s_app)) {
+        ly_app_default_date(&s_app);
+    }
+
+    s_queue = xQueueCreate(LY_INPUT_QUEUE_DEPTH, sizeof(ly_input_event_t));
+    // 先赋值再建任务:应用任务优先级更高,创建后立即调度,
+    // 不能让它看到尚未赋值的 queue。
+    s_app.queue = s_queue;
+    if (!s_queue || xTaskCreate(app_task, "liuyao_app", 6144, &s_app, 5, NULL) !=
+                        pdPASS) {
+        ESP_LOGE(TAG, "应用任务创建失败");
+        return;
+    }
+
+    if (bsp_button_init(on_key, NULL) != ESP_OK) {
+        ESP_LOGE(TAG, "按键初始化失败,应用无法交互");
+        return;
+    }
+
+    if (bsp_lvgl_lock(1000)) {
+        enter_state(&s_app, LY_STATE_HOME);
+        bsp_lvgl_unlock();
+    } else {
+        ESP_LOGE(TAG, "LVGL 锁获取失败");
+    }
+    ESP_LOGI(TAG, "六爻应用就绪(默认起卦日期 %d-%d-%d %d时)", s_app.year,
+             s_app.month, s_app.day, s_app.hour);
+}

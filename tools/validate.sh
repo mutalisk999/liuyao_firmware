@@ -32,6 +32,19 @@ run_static_checks() {
         tests/test_demo_navigation.c main/demo_navigation.c \
         -o "${test_dir}/test_demo_navigation"
     "${test_dir}/test_demo_navigation"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain -Itests \
+        tests/test_liuyao_calendar.c main/liuyao_calendar.c \
+        -o "${test_dir}/test_liuyao_calendar"
+    "${test_dir}/test_liuyao_calendar"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain -Itests \
+        tests/test_liuyao_engine.c main/liuyao_engine.c \
+        -o "${test_dir}/test_liuyao_engine"
+    "${test_dir}/test_liuyao_engine"
+    "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Imain -Itests \
+        tests/test_liuyao_reading.c main/liuyao_engine.c main/liuyao_data.c \
+        main/liuyao_reading.c \
+        -o "${test_dir}/test_liuyao_reading"
+    "${test_dir}/test_liuyao_reading"
     "${CC:-cc}" -std=c11 -Wall -Wextra -Werror -Icomponents/bsp/src \
         tests/test_bsp_display_rounding.c components/bsp/src/bsp_display_rounding.c \
         -o "${test_dir}/test_bsp_display_rounding"
