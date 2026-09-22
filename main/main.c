@@ -16,6 +16,8 @@
 
 static const char *TAG = "main";
 
+#define LY_BACKLIGHT_PERCENT 100  // 点亮屏幕的背光亮度(库仑计/音频共享 I2C)
+
 void app_main(void) {
     ESP_LOGI(TAG, "六爻固件启动(ESP32-C3 AI Passport)");
     esp_sleep_wakeup_cause_t wakeup = esp_sleep_get_wakeup_cause();
@@ -23,7 +25,12 @@ void app_main(void) {
         ESP_LOGI(TAG, "休眠唤醒原因: %d", wakeup);
     }
 
-    bsp_i2c_init();
+    // I2C 供电池计与音频共用:失败只告警(电量显示退回 "--"),不阻塞启动。
+    esp_err_t i2c_err = bsp_i2c_init();
+    if (i2c_err != ESP_OK) {
+        ESP_LOGW(TAG, "I2C 初始化失败(0x%x):电量计与音频编解码不可用",
+                 i2c_err);
+    }
 
     // 显示是本应用的载体,失败无 UI 可言:打日志后退出。
     if (bsp_display_init() != ESP_OK || !bsp_lvgl_init()) {
@@ -32,7 +39,7 @@ void app_main(void) {
                  BSP_LCD_MOSI, BSP_LCD_SCLK, BSP_LCD_CS, BSP_LCD_DC, BSP_LCD_BL);
         return;
     }
-    bsp_display_backlight(100);
+    bsp_display_backlight(LY_BACKLIGHT_PERCENT);
 
     // 电量计失败不阻塞:界面上电量显示为 "--"。
     if (bsp_battery_init() != ESP_OK) {

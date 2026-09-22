@@ -3,8 +3,8 @@
 // 主机测试 tests/test_liuyao_calendar.c 用 1424 个采样点对拍。
 #include "liuyao_calendar.h"
 
-#define CAL_FIRST_YEAR 2019  // 表首年(2020 年 1 月需要 2019 年的大雪)
-#define CAL_LAST_YEAR  2040
+#define CAL_FIRST_YEAR (LIUYAO_DATE_MIN_YEAR - 1)  // 表首年(2020 年 1 月需要 2019 年的大雪)
+#define CAL_LAST_YEAR  LIUYAO_DATE_MAX_YEAR
 #define CAL_YEAR_COUNT (CAL_LAST_YEAR - CAL_FIRST_YEAR + 1)
 
 // 12 个节(月柱分界)的精确时刻,按当年公历月排列(1月小寒..12月大雪)。

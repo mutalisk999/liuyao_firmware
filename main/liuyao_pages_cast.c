@@ -41,8 +41,7 @@ static void cast_show_progress(struct liyao_app_s *app) {
 static void cast_set_coin(struct liyao_app_s *app, int index, bool head) {
     lv_obj_set_style_bg_color(app->cast.coins[index],
         lv_color_hex(head ? LY_COLOR_GOLD : LY_COLOR_PANEL_2), 0);
-    lv_label_set_text(lv_obj_get_child(app->cast.coins[index], 0),
-                      head ? "正" : "背");
+    lv_label_set_text(app->cast.coin_text[index], head ? "正" : "背");
 }
 
 static void cast_refresh_header(struct liyao_app_s *app) {
@@ -91,8 +90,12 @@ static void cast_auto_next(lv_timer_t *timer) {
     (void)timer;
     lv_timer_del(timer);
     app->auto_timer = NULL;
-    ly_app_cast_lines_to_result(app);
-    ly_app_goto(app, LY_STATE_CHART);
+    // 排盘失败时不进入卦盘页:chart 全零会导致 NULL 文本与越界读。
+    if (!ly_app_cast_lines_to_result(app)) {
+        cast_failed(app);
+    } else {
+        ly_app_goto(app, LY_STATE_CHART);
+    }
     ly_app_notify(app);  // 立即唤醒应用任务完成切页
 }
 
@@ -219,7 +222,8 @@ static void manual_refresh(struct liyao_app_s *app) {
         for (int k = 0; k < LY_MANUAL_OPTION_COUNT; k++) {
             if (k_manual_values[k] == app->casting.lines[i]) option = k;
         }
-        lv_obj_t *row = app->manual.rows[i];
+        // rows 自上而下为 上爻..初爻,与卦盘页一致(爻位序号仍按 i+1)。
+        lv_obj_t *row = app->manual.rows[LIUYAO_LINE_COUNT - 1 - i];
         lv_obj_t *label = lv_obj_get_child(row, 0);
         if (option < 0) {
             lv_label_set_text_fmt(label, "%s  —", liuyao_line_position_label(i + 1));
@@ -241,6 +245,8 @@ static void manual_build(struct liyao_app_s *app) {
     app->screen = liuyao_page_create("手动录爻");
     app->manual_row = 0;
     memset(app->casting.lines, 0, sizeof(app->casting.lines));
+    // 行自上而下为 上爻..初爻,与卦盘页和摇卦进度条方向一致,
+    // 用户对照纸质卦盘录入时不会读反。
     for (int i = 0; i < LIUYAO_LINE_COUNT; i++) {
         lv_obj_t *row = lv_obj_create(app->screen);
         lv_obj_remove_style_all(row);
@@ -289,8 +295,12 @@ static void manual_key(struct liyao_app_s *app, bsp_btn_t btn, bsp_btn_ev_t ev) 
         }
         if (app->manual_row >= LIUYAO_LINE_COUNT - 1) {
             app->cast_count = LIUYAO_LINE_COUNT;
-            ly_app_cast_lines_to_result(app);
-            ly_app_goto(app, LY_STATE_CHART);
+            // 排盘失败不进入卦盘页(同 cast_auto_next 的处理)。
+            if (!ly_app_cast_lines_to_result(app)) {
+                cast_failed(app);
+            } else {
+                ly_app_goto(app, LY_STATE_CHART);
+            }
         } else {
             app->manual_row++;
             manual_refresh(app);

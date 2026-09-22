@@ -4,6 +4,10 @@
 
 #include <stdbool.h>
 
+// 支持的起卦日期范围(唯一真值:UI 边界、NVS 校验、默认日期都引用这里)。
+#define LIUYAO_DATE_MIN_YEAR 2020
+#define LIUYAO_DATE_MAX_YEAR 2040
+
 // 干支下标约定:天干 甲=0..癸=9;地支 子=0..亥=11;六十甲子 甲子=0..癸亥=59。
 typedef struct {
     int day_index;     // 日柱六十甲子下标(23 点起按子时政策归次日)

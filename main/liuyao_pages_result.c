@@ -3,9 +3,21 @@
 #include <string.h>
 
 #include "bsp_button.h"
+#include "esp_log.h"
 #include "liuyao_app_internal.h"
 #include "liuyao_data.h"
 #include "liuyao_theme.h"
+
+static const char *TAG = "liuyao";
+
+// chart_row 取用的字段在排盘失败时全为 NULL/0,直接渲染会出空文本与越界读。
+// chart_build/reading_build 在入口统一拦截,页面不应被带无效结果进入。
+static bool ensure_valid(struct liyao_app_s *app, ly_state_t fallback) {
+    if (app->casting_valid) return true;
+    ESP_LOGE(TAG, "结果页收到无效排盘,返回上一页");
+    ly_app_goto(app, fallback);
+    return false;
+}
 
 
 // ---------------------------------------------------------------------------
@@ -46,12 +58,12 @@ static void chart_row(struct liyao_app_s *app, int line_index, int y) {
     if (l->has_change) {
         liuyao_yao_create(app->screen, 186, y + 3, 36, l->change_yang, false, false);
     } else {
-        bool yang = l->yang;
-        liuyao_yao_create(app->screen, 186, y + 3, 36, yang, false, true);
+        liuyao_yao_create(app->screen, 186, y + 3, 36, l->yang, false, true);
     }
 }
 
 static void chart_build(struct liyao_app_s *app) {
+    if (!ensure_valid(app, LY_STATE_METHOD)) return;
     app->screen = liuyao_page_create("卦盘");
     const liuyao_chart_t *c = &app->result.chart;
 
@@ -113,8 +125,12 @@ static void chart_key(struct liyao_app_s *app, bsp_btn_t btn, bsp_btn_ev_t ev) {
 // 解读页:四段文本,上下翻页/滚动。
 // ---------------------------------------------------------------------------
 static void reading_show(struct liyao_app_s *app) {
-    liuyao_compose_reading(&app->result, app->day_gz, app->month_gz,
-                           &app->reading_text);
+    // 同一结果的解读文本不变:只在结果变化时重算,翻页直接复用缓存。
+    if (!app->reading_valid) {
+        liuyao_compose_reading(&app->result, app->day_gz, app->month_gz,
+                               &app->reading_text);
+        app->reading_valid = true;
+    }
     lv_label_set_text(app->reading.body, app->reading_text.pages[app->reading_page]);
     lv_label_set_text_fmt(app->reading.page_label, "%d/%d", app->reading_page + 1,
                           app->reading_text.page_count);
@@ -122,6 +138,7 @@ static void reading_show(struct liyao_app_s *app) {
 }
 
 static void reading_build(struct liyao_app_s *app) {
+    if (!ensure_valid(app, LY_STATE_CHART)) return;
     app->screen = liuyao_page_create("解读");
     lv_obj_t *scroll = lv_obj_create(app->screen);
     lv_obj_remove_style_all(scroll);

@@ -69,14 +69,16 @@ def sexagenary_index(gz: str) -> int:
 
 
 def calendar_facts(d: date, hour: int) -> dict[str, int]:
-    """Reference values for one sample: day/month/year pillars."""
+    """Reference values for one sample: day/month/year pillars.
+
+    月柱按节的分钟级时刻判定,与 liuyao_calendar.c 的 k_term_offset 表同精度。
+    不能用“把小时钳到 12”之类的近似:上午发生的节(如 2020 惊蛰 10:56)
+    会让钳位结果错到节后,从而测不出真实回归。
+    """
     rolled = d + timedelta(days=1) if hour >= 23 else d
     day_gz = Solar.fromYmdHms(rolled.year, rolled.month, rolled.day, 12, 0, 0) \
         .getLunar().getEightChar().getDay()
-    eight = Solar.fromYmdHms(d.year, d.month, d.day, max(hour, 12) % 24, 0, 0) \
-        .getLunar().getEightChar()
-    month_gz = eight.getMonth()
-    year_gz = eight.getYear()
+    month_gz, year_gz = month_year_pillars(d, hour)
     return {
         "day": sexagenary_index(day_gz),
         "month_branch": BRANCHES.index(month_gz[1]),
@@ -84,6 +86,65 @@ def calendar_facts(d: date, hour: int) -> dict[str, int]:
         "year_stem": STEMS.index(year_gz[0]),
         "year_branch": BRANCHES.index(year_gz[1]),
     }
+
+
+# 13 个月柱分界,按时间顺序:去年12月大雪 → 今年1月小寒 → ... → 今年12月大雪。
+# 与 liuyao_calendar.c 的 k_term_month/k_term_branch 一一对应。
+CAL_TERM_MONTH = (12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+CAL_TERM_BRANCH = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0)
+CAL_TERM_NAME = ("大雪", "小寒", "立春", "惊蛰", "清明", "立夏", "芒种",
+                 "小暑", "立秋", "白露", "寒露", "立冬", "大雪")
+
+
+# 节(月柱分界)与中气成对出现:getJieQiTable 同时给出中文名和英文常量名,
+# 这里只取 12 个开月柱的节。键名为节气中文名。
+JIE_NAMES = ("小寒", "立春", "惊蛰", "清明", "立夏", "芒种",
+             "小暑", "立秋", "白露", "寒露", "立冬", "大雪")
+
+
+def term_abs_minutes(year: int, month: int) -> int:
+    """某年某月之节的绝对分钟:(日-1)*1440 + 当日分钟,与 C 表项同算法。"""
+    solar = Solar.fromYmd(year, month, 15).getLunar().getJieQiTable()
+    matches = [v for n, v in solar.items()
+               if n in JIE_NAMES and v.getMonth() == month]
+    if len(matches) != 1:
+        raise ValueError(f"expected 1 jie for {year}-{month}, got {matches}")
+    value = matches[0]
+    return (value.getDay() - 1) * 1440 + value.getHour() * 60 + value.getMinute()
+
+
+def month_year_pillars(d: date, hour: int) -> tuple[str, str]:
+    """月柱与年柱:沿 13 个节分界回溯,取不晚于查询时刻的最后一个。
+
+    查询时刻含分钟(小时取整点,与 UI 的时辰选择粒度一致),与
+    liuyao_date_facts 的 `days*1440 + hour*60` 比较方式相同。
+    """
+    query = date_to_minutes(d) + hour * 60
+    branch = 0
+    lichun = None
+    for i in range(13):
+        y = d.year - (1 if i == 0 else 0)
+        m = CAL_TERM_MONTH[i]
+        abs_min = date_to_minutes(date(y, m, 1)) + term_abs_minutes(y, m)
+        if abs_min <= query:
+            branch = CAL_TERM_BRANCH[i]
+            if i == 2:
+                lichun = abs_min
+    if lichun is None:
+        abs_min = date_to_minutes(date(d.year, 2, 1)) + term_abs_minutes(d.year, 2)
+        lichun = abs_min
+    pillar_year = d.year if query >= lichun else d.year - 1
+    year_stem = (pillar_year - 4) % 10
+    month_number = (branch - 2) % 12
+    month_stem = (year_stem * 2 + 2 + month_number) % 10
+    return f"{STEMS[month_stem]}{BRANCHES[branch]}", \
+        f"{STEMS[year_stem]}{BRANCHES[(pillar_year - 4) % 12]}"
+
+
+def date_to_minutes(d: date) -> int:
+    """公历日期转自 1970-01-01 起的绝对分钟(当日 0 点)。"""
+    epoch = date(1970, 1, 1)
+    return (d - epoch).days * 1440
 
 
 REL_LETTER = {"same_element": "s", "generates": "g", "controls": "c",
@@ -173,11 +234,14 @@ def main() -> None:
             facts = calendar_facts(d, hour)
             cal_rows.append(cal_row(d, hour, facts))
         d += step
+    # 节气日采样必须覆盖节前的上午:节发生在上午时,整点小时在节前与节后
+    # 属于不同月支,这是最容易出错也最该锁定的时段。
     for b in sorted(boundary_days):
         for delta in (-1, 0, 1):
             bd = b + timedelta(days=delta)
-            facts = calendar_facts(bd, 12)
-            cal_rows.append(cal_row(bd, 12, facts))
+            for hour in (0, 6, 10, 12, 18, 23):
+                facts = calendar_facts(bd, hour)
+                cal_rows.append(cal_row(bd, hour, facts))
     out.append("typedef struct {")
     out.append("    int year, month, day, hour;")
     out.append("    int day_index, month_branch, month_stem, year_stem, year_branch;")

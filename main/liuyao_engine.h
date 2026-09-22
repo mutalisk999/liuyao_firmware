@@ -140,10 +140,9 @@ typedef struct {
 // 排盘。输入非法(爻值/日柱/月支越界)返回 false 且不动 out。
 bool liuyao_cast(const liuyao_casting_t *casting, liuyao_result_t *out);
 
-// 干支/五行名称辅助(UI 显示用)。index 越界返回 NULL。
+// 干支名称辅助(UI 显示用)。index 越界返回 NULL。
 const char *liuyao_stem_str(int index);
 const char *liuyao_branch_str(int index);
-const char *liuyao_element_str(int element);
 // 地支对应五行下标(0木 1火 2土 3金 4水);越界返回 -1。
 int liuyao_branch_element(int branch);
 

@@ -5,6 +5,7 @@
 
 #include "bsp_button.h"
 #include "liuyao_app_internal.h"
+#include "liuyao_calendar.h"
 #include "liuyao_data.h"
 #include "liuyao_theme.h"
 
@@ -164,9 +165,13 @@ static void perspective_key(struct liyao_app_s *app, bsp_btn_t btn,
 // ---------------------------------------------------------------------------
 // 起卦日期(年/月/日/时 四字段)
 // ---------------------------------------------------------------------------
-static const int k_date_min[LY_DATE_FIELD_COUNT] = {2020, 1, 1, 0};
-static const int k_date_max[LY_DATE_FIELD_COUNT] = {2040, 12, 31, 23};
+static const int k_date_min[LY_DATE_FIELD_COUNT] = {
+    LIUYAO_DATE_MIN_YEAR, 1, 1, 0};
+static const int k_date_max[LY_DATE_FIELD_COUNT] = {
+    LIUYAO_DATE_MAX_YEAR, 12, 31, 23};
 static const char *const k_date_title[LY_DATE_FIELD_COUNT] = {"年", "月", "日", "时"};
+
+#define LY_METHOD_COUNT 2  // 起卦方式选项数(摇卦/手动录爻)
 
 static void date_refresh(struct liyao_app_s *app) {
     int values[LY_DATE_FIELD_COUNT] = {app->year, app->month, app->day, app->hour};
@@ -186,6 +191,8 @@ static void date_refresh(struct liyao_app_s *app) {
 }
 
 static void date_clamp(struct liyao_app_s *app) {
+    if (app->year < k_date_min[0]) app->year = k_date_max[0];
+    if (app->year > k_date_max[0]) app->year = k_date_min[0];
     if (app->month < 1) app->month = 12;
     if (app->month > 12) app->month = 1;
     int dim = ly_days_in_month_clamped(app->year, app->month, app->day);
@@ -193,8 +200,6 @@ static void date_clamp(struct liyao_app_s *app) {
     if (app->day < 1) app->day = 1;
     if (app->hour < 0) app->hour = 23;
     if (app->hour > 23) app->hour = 0;
-    if (app->year < k_date_min[0]) app->year = k_date_max[0];
-    if (app->year > k_date_max[0]) app->year = k_date_min[0];
 }
 
 static void date_build(struct liyao_app_s *app) {
@@ -252,8 +257,8 @@ static void date_key(struct liyao_app_s *app, bsp_btn_t btn, bsp_btn_ev_t ev) {
 // ---------------------------------------------------------------------------
 static void method_build(struct liyao_app_s *app) {
     app->screen = liuyao_page_create("起卦方式");
-    static const char *const k_options[2] = {"摇卦(自动)", "手动录爻"};
-    for (int i = 0; i < 2; i++) {
+    static const char *const k_options[LY_METHOD_COUNT] = {"摇卦(自动)", "手动录爻"};
+    for (int i = 0; i < LY_METHOD_COUNT; i++) {
         lv_obj_t *panel = lv_obj_create(app->screen);
         lv_obj_remove_style_all(panel);
         lv_obj_set_pos(panel, 30, 84 + i * 56);
@@ -266,16 +271,16 @@ static void method_build(struct liyao_app_s *app) {
     }
     liuyao_hint_create(app->screen, 214, "已有铜钱结果请选手动录爻");
     app->sel = 0;
-    grid_refresh(app, &app->perspective, 2);
+    grid_refresh(app, &app->perspective, LY_METHOD_COUNT);
 }
 
 static void method_key(struct liyao_app_s *app, bsp_btn_t btn, bsp_btn_ev_t ev) {
     if (btn == BSP_BTN_UP && ev == BSP_BTN_CLICK) {
-        app->sel = (app->sel + 1) % 2;
-        grid_refresh(app, &app->perspective, 2);
+        app->sel = (app->sel + LY_METHOD_COUNT - 1) % LY_METHOD_COUNT;
+        grid_refresh(app, &app->perspective, LY_METHOD_COUNT);
     } else if (btn == BSP_BTN_DOWN && ev == BSP_BTN_CLICK) {
-        app->sel = (app->sel + 1) % 2;
-        grid_refresh(app, &app->perspective, 2);
+        app->sel = (app->sel + 1) % LY_METHOD_COUNT;
+        grid_refresh(app, &app->perspective, LY_METHOD_COUNT);
     } else if (btn == BSP_BTN_OK && ev == BSP_BTN_CLICK) {
         ly_app_goto(app, app->sel == 0 ? LY_STATE_CASTING : LY_STATE_MANUAL);
     } else if (btn == BSP_BTN_OK && ev == BSP_BTN_LONG) {

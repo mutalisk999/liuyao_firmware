@@ -240,21 +240,24 @@ static int tendency_score(const liuyao_result_t *r) {
     int pos = primary_candidate(an);
     if (pos > 0) {
         const liuyao_line_t *l = &c->lines[pos - 1];
-        if (l->strength == LIUYAO_STRENGTH_SUPPORTED) score += 2;
-        if (l->strength == LIUYAO_STRENGTH_WEAKENED) score -= 2;
-        if (l->is_void || l->is_month_break) score -= 1;
+        if (l->strength == LIUYAO_STRENGTH_SUPPORTED) score += 3;
+        if (l->strength == LIUYAO_STRENGTH_WEAKENED) score -= 3;
+        if (l->is_void) score -= 2;
+        if (l->is_month_break) score -= 2;
         if (l->moving) score += 1;
         if (an->candidate_count == 0) score -= 1;  // 用神伏藏
+        if (pos == c->shi_pos) score += 1;         // 用神临世:自己掌权
+        if (pos == c->ying_pos) score += 1;        // 用神临应:对方主动
     }
-    if (c->pattern == LIUYAO_PATTERN_SIX_HARMONY) score += 1;
-    if (c->pattern == LIUYAO_PATTERN_SIX_CLASH) score -= 1;
+    if (c->pattern == LIUYAO_PATTERN_SIX_HARMONY) score += 2;
+    if (c->pattern == LIUYAO_PATTERN_SIX_CLASH) score -= 2;
     if (c->pattern == LIUYAO_PATTERN_SIX_CLASH &&
         c->changed_pattern == LIUYAO_PATTERN_SIX_HARMONY) {
-        score += 1;
+        score += 1;  // 冲中变合,先难后顺
     }
     if (c->pattern == LIUYAO_PATTERN_SIX_HARMONY &&
         c->changed_pattern == LIUYAO_PATTERN_SIX_CLASH) {
-        score -= 1;
+        score -= 1;  // 合中变冲,防生变
     }
     int shi_branch = c->lines[c->shi_pos - 1].branch_index;
     for (int i = 0; i < LIUYAO_LINE_COUNT; i++) {
@@ -266,17 +269,80 @@ static int tendency_score(const liuyao_result_t *r) {
     return score;
 }
 
+// 大白话结论里描述卦象特征的那一句:挑最有信息量的事实说,不堆术语。
+// 返回 NULL 表示没有特别值得单说的特征。
+static const char *feature_sentence(const liuyao_result_t *r) {
+    const liuyao_chart_t *c = &r->chart;
+    const liuyao_analysis_t *an = &r->analysis;
+    int pos = primary_candidate(an);
+
+    // 优先说卦的大格局:六冲主散、六合主合,是全局性的。
+    if (c->pattern == LIUYAO_PATTERN_SIX_CLASH &&
+        c->changed_pattern == LIUYAO_PATTERN_SIX_HARMONY) {
+        return "这卦是“先散后聚”,开头闹心,后面能拢回来,别在开头就泄气。";
+    }
+    if (c->pattern == LIUYAO_PATTERN_SIX_HARMONY &&
+        c->changed_pattern == LIUYAO_PATTERN_SIX_CLASH) {
+        return "这卦是“先合后散”,前面顺,中途要防生变,好事别拖太久。";
+    }
+    if (c->pattern == LIUYAO_PATTERN_SIX_CLASH) {
+        return "这卦逢六冲,主散主快,事情容易反复,定下来的事要抓紧办。";
+    }
+    if (c->pattern == LIUYAO_PATTERN_SIX_HARMONY) {
+        return "这卦逢六合,主合主成,贵在人和,多拉拢能帮你的人。";
+    }
+    if (pos > 0) {
+        const liuyao_line_t *l = &c->lines[pos - 1];
+        if (an->candidate_count == 0) {
+            return "你关心的这件事,卦里没有明着出现,说明眼下还不到火候,得等机会露头。";
+        }
+        if (l->is_void) {
+            return "这事现在还“空”着,条件没落实,急也没用,等日子到了自然成形。";
+        }
+        if (l->is_month_break) {
+            return "这个月对这件事不利,硬冲容易碰壁,过了这个月再发力。";
+        }
+        if (l->moving && l->change_advance == 1) {
+            return "关键的那一爻在化进神,势头在往上走,可以顺势加一把劲。";
+        }
+        if (l->moving && l->change_advance == -1) {
+            return "关键的那一爻在化退神,后劲不足,见好就收别贪。";
+        }
+        if (l->strength == LIUYAO_STRENGTH_WEAKENED) {
+            return "这卦里帮你的人不多,更多是阻力,这时候稳比冲更重要。";
+        }
+        if (l->strength == LIUYAO_STRENGTH_SUPPORTED) {
+            return "这卦里生扶的力量足,条件是向着你的,可以放手做一些尝试。";
+        }
+    }
+    // 动爻冲克世爻:外力给你施压。
+    int shi_branch = c->lines[c->shi_pos - 1].branch_index;
+    for (int i = 0; i < LIUYAO_LINE_COUNT; i++) {
+        if (!c->lines[i].moving || c->lines[i].is_shi) continue;
+        if (action_to(&c->lines[i], shi_branch) == -1) {
+            return "有动爻在克制你的位置,外部有人或事在压你,先摸清来路再应对。";
+        }
+    }
+    for (int i = 0; i < LIUYAO_LINE_COUNT; i++) {
+        if (!c->lines[i].moving || c->lines[i].is_shi) continue;
+        if (action_to(&c->lines[i], shi_branch) == 1) {
+            return "有动爻在生扶你的位置,暗处有人帮你,不用一个人硬扛。";
+        }
+    }
+    return NULL;
+}
+
 // 结论页分类白话建议(不用术数词,普通人口吻;下标与 liuyao_category 对齐)。
 static const char *const k_plain_advice[LIUYAO_CAT_COUNT] = {
-    "不管问什么，先把最要紧的一件事定下来，其他事会跟着顺。",
-    "工作上的事，稳住手头的节奏，该争取就去争取，别自己吓自己。",
-    "钱的事急不来，看准了再出手，别把本钱放在不踏实的地方。",
-    "感情的事多沟通、少猜疑，心意到了，关系自然会缓和。",
-    "学习没有捷径，按计划一步步来，考试时放平心态就好。",
-    "出发前把行程和证件都核对好，路上稳一点，别赶时间。",
-    "家里的事，先把住的地方收拾顺当，家人之间多体谅。",
-    "打官司费心费力，能协商解决最好，不行就把证据准备齐全。",
-    "家里人之间多说说心里话，小事别计较，气氛好了事就顺。",
+    "不管问什么,先把最要紧的一件事定下来,其他事会跟着顺。",
+    "工作上的事,稳住手头的节奏,该争取就去争取,别自己吓自己。",
+    "钱的事急不来,看准了再出手,别把本钱放在不踏实的地方。",
+    "感情的事多沟通、少猜疑,心意到了,关系自然会缓和。",
+    "学习没有捷径,按计划一步步来,考试时放平心态就好。",
+    "出发前把行程和证件都核对好,路上稳一点,别赶时间。",
+    "家里的事,先把住的地方收拾顺当,家人之间多体谅。",
+    "打官司费心费力,能协商解决最好,不行就把证据准备齐全。",
+    "家里人之间多说说心里话,小事别计较,气氛好了事就顺。",
 };
 
 static void page_conclusion(const liuyao_result_t *r, appender_t *a) {
@@ -285,12 +351,14 @@ static void page_conclusion(const liuyao_result_t *r, appender_t *a) {
     int category = an->category;
     if (category < 0 || category >= LIUYAO_CAT_COUNT) category = 0;
     apf(a, "【结论】\n综合来看:%s",
-        score >= 2 ? "事情比较顺，条件对你有利，想做的事可以放心去做。\n"
+        score >= 2 ? "事情比较顺,条件对你有利,想做的事可以放心去做。\n"
                    : score <= -2
-                         ? "眼下不太顺，阻力比较多，先别急着推进，缓一缓、稳一稳更好。\n"
-                         : "说不上好也说不上坏，关键看你自己的安排和时机抓得怎么样。\n");
+                         ? "眼下不太顺,阻力比较多,先别急着推进,缓一缓、稳一稳更好。\n"
+                         : "说不上好也说不上坏,关键看你自己的安排和时机抓得怎么样。\n");
+    const char *feature = feature_sentence(r);
+    if (feature) apf(a, "%s\n", feature);
     apf(a, "%s\n", k_plain_advice[category]);
-    apf(a, "这些说法只是参考，事情最后怎么样，还得看你自己。\n");
+    apf(a, "这些说法只是参考,事情最后怎么样,还得看你自己。\n");
 }
 
 void liuyao_compose_reading(const liuyao_result_t *result, const char *day_gz,

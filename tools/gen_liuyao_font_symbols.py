@@ -44,9 +44,13 @@ def collect() -> str:
         for literal in STRING_RE.findall(text):
             chars.update(literal)
     # 基础保障:可打印 ASCII、常用全角标点与特殊符号。
+    # 标点符号包含若干当前文案未使用的字形(？、！、…、书名号等):
+    # 这是刻意保留的排版储备,避免日后改文案时还要重生成字库。
+    # CJK 正文统一用全角逗号/句号,冒号与括号用半角(见 liuyao_reading.c),
+    # 因此储备里不包含全角冒号与全角括号。
     chars.update(chr(c) for c in range(0x20, 0x7F))
     chars.update("，。、；：？！·—…《》「」()％‰℃")
-    chars.update("○×○○✕")  # 动爻与装饰符号
+    chars.update("○×✕")  # 动爻与装饰符号
     chars.discard("\n")
     chars.discard("\t")
     chars.discard("\\")

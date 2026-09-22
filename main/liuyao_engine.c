@@ -192,10 +192,6 @@ const char *liuyao_branch_str(int index) {
     return index >= 0 && index < 12 ? k_branches[index] : NULL;
 }
 
-const char *liuyao_element_str(int element) {
-    return element >= 0 && element < 5 ? k_elements[element] : NULL;
-}
-
 int liuyao_branch_element(int branch) {
     return branch >= 0 && branch < 12 ? k_branch_element[branch] : -1;
 }

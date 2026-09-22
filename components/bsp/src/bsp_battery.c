@@ -112,15 +112,8 @@ static int cw_update_profile(void) {
     return cw_enter_active();
 }
 
-// 首次计算期间 SOC 可能暂时大于 100；最多等待 5 秒再判定初始化失败。
-static int cw_wait_soc_ready(void) {
-    for (int retry = 0; retry < 50; retry++) {
-        uint8_t soc = 0;
-        vTaskDelay(pdMS_TO_TICKS(100));
-        if (cw_read(CW_REG_SOC_H, &soc, 1) == 0 && soc <= 100) return 0;
-    }
-    return -1;
-}
+// 首次计算期间 SOC 可能暂时大于 100。bsp_battery_soc() 会过滤未就绪读数
+// (soc > 100 返回 -1),故初始化不必等待:UI 先显示 "--",就绪后自动转真实值。
 
 esp_err_t bsp_battery_init(void) {
     if (s_dev) return ESP_OK;
@@ -173,12 +166,9 @@ esp_err_t bsp_battery_init(void) {
         ESP_LOGI(TAG, "优特利 520mAh profile 已匹配");
     }
 
-    if (cw_wait_soc_ready() != 0) {
-        ESP_LOGE(TAG, "等待首次 SOC 计算超时");
-        e = ESP_ERR_TIMEOUT;
-        goto fail;
-    }
-
+    // 首次 SOC 计算最多需 5 秒;放在启动路径会让屏幕黑屏到就绪为止。
+    // 这里不等待:bsp_battery_soc() 在芯片未就绪时返回 -1,UI 显示 "--",
+    // 就绪后自动转为真实百分比。调用方可通过 bsp_battery_soc() 判断是否就绪。
     return ESP_OK;
 
 fail:

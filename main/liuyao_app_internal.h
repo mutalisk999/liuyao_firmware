@@ -53,10 +53,6 @@ typedef struct {
 } ly_date_widgets_t;
 
 // 卦盘页部件(行部件由 build 直接创建,不保留句柄)。
-typedef struct {
-    lv_obj_t *name_label;
-} ly_chart_widgets_t;
-
 // 解读页部件。
 typedef struct {
     lv_obj_t *scroll;   // 滚动容器(按键驱动)
@@ -82,6 +78,7 @@ struct liyao_app_s {
     liuyao_casting_t casting;
     bool casting_valid;
     liuyao_result_t result;
+    bool reading_valid;  // reading_text 已对当前 result 生成过(翻页时直接复用)
     liuyao_reading_t reading_text;  // 解读分页文本缓冲(~3KB,常驻静态)
     char day_gz[10];    // "甲子"
     char month_gz[10];  // "丙寅"
@@ -113,9 +110,12 @@ void ly_app_notify(struct liyao_app_s *app);
 
 // —— 供各页面共用的工具(liuyao_app.c 提供) ——
 void ly_app_goto(struct liyao_app_s *app, ly_state_t next);  // 请求切页(删屏重建)
-void ly_app_cast_lines_to_result(struct liyao_app_s *app);   // 依据 casting 计算 result
+// 起卦失败的统一出口:置无效标记并回到起卦方式页,不进入需要 result 的页面。
+void cast_failed(struct liyao_app_s *app);
+// 依据 casting 计算 result。成功返回 true;失败时置 casting_valid=false。
+bool ly_app_cast_lines_to_result(struct liyao_app_s *app);
 bool ly_app_load_last_date(struct liyao_app_s *app);
-void ly_app_save_last_date(const struct liyao_app_s *app);
+void ly_app_save_last_date(const struct liyao_app_s *app);  // 异步:仅投递写请求
 void ly_app_default_date(struct liyao_app_s *app);
 int ly_days_in_month_clamped(int year, int month, int day);
 
