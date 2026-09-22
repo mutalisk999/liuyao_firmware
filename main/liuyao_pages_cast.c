@@ -3,6 +3,7 @@
 #include <string.h>
 
 #include "bsp_button.h"
+#include "esp_log.h"
 #include "esp_random.h"
 #include "liuyao_app_internal.h"
 #include "liuyao_data.h"
@@ -11,6 +12,8 @@
 #define CAST_ANIM_TICKS 9
 #define CAST_ANIM_PERIOD_MS 70
 #define CAST_AUTO_NEXT_MS 900
+
+static const char *const TAG = "liuyao-cast";
 
 // 动画帧计数与所属应用(同一时刻至多一段摇卦动画,文件内静态即可;
 // LVGL 9 的 lv_timer_t 不透明,不能直接读字段)。
@@ -80,7 +83,19 @@ static void cast_anim_stop(struct liyao_app_s *app, bool settle) {
     cast_show_progress(app);
     cast_refresh_header(app);
     if (app->cast_count >= LIUYAO_LINE_COUNT) {
-        app->auto_timer = lv_timer_create(cast_auto_next, CAST_AUTO_NEXT_MS, app);
+        lv_timer_t *t = lv_timer_create(cast_auto_next, CAST_AUTO_NEXT_MS, app);
+        // 内存不足时定时器建不出来:直接当场完成切页,避免卡在"六爻俱备"。
+        if (t == NULL) {
+            ESP_LOGE(TAG, "自动切页定时器创建失败,直接进入卦盘");
+            if (!ly_app_cast_lines_to_result(app)) {
+                cast_failed(app);
+            } else {
+                ly_app_goto(app, LY_STATE_CHART);
+            }
+            ly_app_notify(app);
+        } else {
+            app->auto_timer = t;
+        }
     }
 }
 
@@ -188,7 +203,14 @@ static void cast_key(struct liyao_app_s *app, bsp_btn_t btn, bsp_btn_ev_t ev) {
         if (app->cast_busy || app->cast_count >= LIUYAO_LINE_COUNT) return;
         app->cast_busy = true;
         lv_label_set_text(app->cast.result_label, "");
-        app->anim_timer = lv_timer_create(cast_anim_tick, CAST_ANIM_PERIOD_MS, app);
+        lv_timer_t *t = lv_timer_create(cast_anim_tick, CAST_ANIM_PERIOD_MS, app);
+        // 建不出定时器就不能摇卦:解除忙态,让用户可以长按返回或重试。
+        if (t == NULL) {
+            ESP_LOGE(TAG, "摇卦动画定时器创建失败");
+            app->cast_busy = false;
+            return;
+        }
+        app->anim_timer = t;
         s_cast_ticks = 0;
     } else if (btn == BSP_BTN_OK && ev == BSP_BTN_LONG) {
         ly_app_goto(app, LY_STATE_HOME);
@@ -268,26 +290,33 @@ static void manual_build(struct liyao_app_s *app) {
     manual_refresh(app);
 }
 
+// 未选爻(值为 0)时,UP/DOWN 从哪个选项开始转。
+// 表里 UP 走 少阳->少阴->老阳->老阴,DOWN 反向;两者第一次按下都落在
+// 与 OK 默认值(少阳)相邻的选项上,避免三个按键给出三种不同起点。
+static int manual_option_of(int value) {
+    for (int k = 0; k < LY_MANUAL_OPTION_COUNT; k++) {
+        if (k_manual_values[k] == value) return k;
+    }
+    return -1;  // 未选值
+}
+
+static void manual_step(struct liyao_app_s *app, int delta) {
+    int option = manual_option_of(app->casting.lines[app->manual_row]);
+    if (option < 0) {
+        // 未选值:按"从少阳出发"对齐 OK 的默认行为。
+        option = delta > 0 ? 0 : 1;
+    } else {
+        option = (option + delta + LY_MANUAL_OPTION_COUNT) % LY_MANUAL_OPTION_COUNT;
+    }
+    app->casting.lines[app->manual_row] = k_manual_values[option];
+    manual_refresh(app);
+}
+
 static void manual_key(struct liyao_app_s *app, bsp_btn_t btn, bsp_btn_ev_t ev) {
     if (btn == BSP_BTN_UP && ev == BSP_BTN_CLICK) {
-        int current = app->casting.lines[app->manual_row];
-        int option = 0;
-        for (int k = 0; k < LY_MANUAL_OPTION_COUNT; k++) {
-            if (k_manual_values[k] == current) option = k;
-        }
-        app->casting.lines[app->manual_row] =
-            k_manual_values[(option + 1) % LY_MANUAL_OPTION_COUNT];
-        manual_refresh(app);
+        manual_step(app, 1);
     } else if (btn == BSP_BTN_DOWN && ev == BSP_BTN_CLICK) {
-        int current = app->casting.lines[app->manual_row];
-        int option = 0;
-        for (int k = 0; k < LY_MANUAL_OPTION_COUNT; k++) {
-            if (k_manual_values[k] == current) option = k;
-        }
-        app->casting.lines[app->manual_row] =
-            k_manual_values[(option + LY_MANUAL_OPTION_COUNT - 1) %
-                            LY_MANUAL_OPTION_COUNT];
-        manual_refresh(app);
+        manual_step(app, -1);
     } else if (btn == BSP_BTN_OK && ev == BSP_BTN_CLICK) {
         if (app->casting.lines[app->manual_row] == 0) {
             // 未选值:填入少阳,避免跳爻。

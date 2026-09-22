@@ -46,6 +46,45 @@ static int primary_candidate(const liuyao_analysis_t *a) {
     return -1;
 }
 
+// 用神的有效数据视图。明露时取该爻;伏藏时必须取伏神自己——伏神的地支、
+// 五行、旬空、月破与压在上面的飞神是两回事,用飞神的数据去写"用神"
+// 会把整页解读写错(飞神旺不等于伏神旺)。
+typedef struct {
+    const char *branch;
+    const char *element;
+    int branch_index;
+    bool is_void;
+    bool is_month_break;
+    bool is_day_clash;
+    liuyao_strength_t strength;
+    bool moving;
+    int change_advance;  // 1 化进, -1 化退(伏神不动,恒为 0)
+} yong_view_t;
+
+// 返回 false 表示卦中既无明露也无伏神候选(走世爻或主线支路)。
+static bool yongshen_view(const liuyao_result_t *r, yong_view_t *v) {
+    const liuyao_analysis_t *an = &r->analysis;
+    int pos = primary_candidate(an);
+    if (pos <= 0) return false;
+    if (an->candidate_count > 0) {
+        const liuyao_line_t *l = &r->chart.lines[pos - 1];
+        *v = (yong_view_t){l->branch,  l->element,       l->branch_index,
+                           l->is_void, l->is_month_break, l->is_day_clash,
+                           l->strength, l->moving, l->change_advance};
+        return true;
+    }
+    for (int i = 0; i < r->chart.hidden_count; i++) {
+        if (r->chart.hidden[i].position == pos) {
+            const liuyao_hidden_t *h = &r->chart.hidden[i];
+            *v = (yong_view_t){h->branch,  h->element,       h->branch_index,
+                               h->is_void, h->is_month_break, h->is_day_clash,
+                               h->strength, false, 0};
+            return true;
+        }
+    }
+    return false;
+}
+
 // 世应生克描述(以五行论)。
 static const char *shi_ying_relation(const liuyao_chart_t *c) {
     int shi_elem = liuyao_branch_element(c->lines[c->shi_pos - 1].branch_index);
@@ -111,26 +150,33 @@ static void page_yongshen(const liuyao_result_t *r, appender_t *a) {
             apf(a, "卦中未见用神。\n");
         } else {
             bool hidden = an->candidate_count == 0;
-            const liuyao_line_t *line = &c->lines[pos - 1];
+            yong_view_t y;
+            yongshen_view(r, &y);
             if (hidden) {
-                apf(a, "用神不现，伏于%d爻之下(%s%s)，未得引拔。\n", pos,
-                    line->branch, line->element);
+                apf(a, "用神不现，伏于%d爻%s之下(%s%s)，未得引拔。\n", pos,
+                    c->lines[pos - 1].branch, y.branch, y.element);
             } else {
-                apf(a, "明现于%d爻，%s%s%s，%s。\n", pos, line->branch,
-                    line->element, line->relative ? line->relative : "",
-                    line->moving ? "发动" : "安静");
+                apf(a, "明现于%d爻，%s%s%s，%s。\n", pos, y.branch,
+                    y.element, c->lines[pos - 1].relative ? c->lines[pos - 1].relative : "",
+                    y.moving ? "发动" : "安静");
             }
-            if (line->is_void) apf(a, "值旬空，力量暂不落实。\n");
-            if (line->is_month_break) apf(a, "逢月破，本月中受损。\n");
-            if (!hidden && line->is_day_clash && !line->moving) {
-                apf(a, "被日辰冲，静者暗动。\n");
+            if (y.is_void) apf(a, "值旬空，力量暂不落实。\n");
+            if (y.is_month_break) apf(a, "逢月破，本月中受损。\n");
+            if (!hidden && y.is_day_clash && !y.moving) {
+                // 静爻被日冲:旺相者为暗动(虽静有变),休囚者只是被克散。
+                if (y.strength == LIUYAO_STRENGTH_SUPPORTED ||
+                    y.strength == LIUYAO_STRENGTH_CONTESTED) {
+                    apf(a, "被日辰冲，静者暗动。\n");
+                } else {
+                    apf(a, "被日辰冲，休囚无力，难有作为。\n");
+                }
             }
             apf(a, "月建日辰:%s。\n",
-                line->strength == LIUYAO_STRENGTH_SUPPORTED
+                y.strength == LIUYAO_STRENGTH_SUPPORTED
                     ? "生扶用神，旺相有力"
-                    : line->strength == LIUYAO_STRENGTH_WEAKENED
+                    : y.strength == LIUYAO_STRENGTH_WEAKENED
                           ? "克抑用神，衰弱受制"
-                          : line->strength == LIUYAO_STRENGTH_CONTESTED
+                          : y.strength == LIUYAO_STRENGTH_CONTESTED
                                 ? "有生有克，旺衰相抵"
                                 : "平平相持，不生不克");
         }
@@ -169,7 +215,10 @@ static void page_moving(const liuyao_result_t *r, appender_t *a) {
     const liuyao_analysis_t *an = &r->analysis;
     int shi_branch = c->lines[c->shi_pos - 1].branch_index;
     int yong_pos = primary_candidate(an);
-    int yong_branch = yong_pos > 0 ? c->lines[yong_pos - 1].branch_index : -1;
+    // 伏藏时取伏神地支,否则动爻对"用神"的生克会算到飞神头上。
+    yong_view_t yong_view;
+    bool have_yong = yongshen_view(r, &yong_view);
+    int yong_branch = have_yong ? yong_view.branch_index : -1;
 
     apf(a, "【动爻】\n");
     int described = 0;
@@ -202,25 +251,28 @@ static void page_moving(const liuyao_result_t *r, appender_t *a) {
     // 应期候选(仅列参考,不做确定承诺)。
     apf(a, "【应期参考】\n");
     if (yong_pos > 0) {
-        const liuyao_line_t *line = &c->lines[yong_pos - 1];
-        const char *br = line->branch;
-        const char *clash = liuyao_branch_str((line->branch_index + 6) % 12);
-        const char *harmony = liuyao_branch_str(k_harmony[line->branch_index]);
+        // 伏藏时地支取伏神自己的(冲飞神另说),否则取用神爻地支。
+        yong_view_t y;
+        bool have_yong = yongshen_view(r, &y);
+        const char *br = have_yong ? y.branch : c->lines[yong_pos - 1].branch;
+        int yb = have_yong ? y.branch_index : c->lines[yong_pos - 1].branch_index;
+        const char *clash = liuyao_branch_str((yb + 6) % 12);
+        const char *harmony = liuyao_branch_str(k_harmony[yb]);
         bool any = false;
         if (an->candidate_count == 0) {
             apf(a, "用神伏藏，冲去飞神(%s)之日可见端倪。\n",
-                line->branch);  // line 即飞神位
+                c->lines[yong_pos - 1].branch);
             any = true;
         }
-        if (line->is_void) {
+        if (have_yong && y.is_void) {
             apf(a, "%s日填实出空，或%s日冲空而应。\n", br, clash);
             any = true;
         }
-        if (line->is_month_break) {
+        if (have_yong && y.is_month_break) {
             apf(a, "%s日实破，或%s日逢合有望。\n", br, harmony);
             any = true;
         }
-        if (line->moving && !any) {
+        if (have_yong && y.moving && !any) {
             apf(a, "%s日逢值，%s日逢合，为发动之应。\n", br, harmony);
             any = true;
         }
@@ -238,13 +290,14 @@ static int tendency_score(const liuyao_result_t *r) {
     const liuyao_analysis_t *an = &r->analysis;
     int score = 0;
     int pos = primary_candidate(an);
-    if (pos > 0) {
-        const liuyao_line_t *l = &c->lines[pos - 1];
-        if (l->strength == LIUYAO_STRENGTH_SUPPORTED) score += 3;
-        if (l->strength == LIUYAO_STRENGTH_WEAKENED) score -= 3;
-        if (l->is_void) score -= 2;
-        if (l->is_month_break) score -= 2;
-        if (l->moving) score += 1;
+    yong_view_t y;
+    bool have_yong = yongshen_view(r, &y);
+    if (have_yong) {
+        if (y.strength == LIUYAO_STRENGTH_SUPPORTED) score += 3;
+        if (y.strength == LIUYAO_STRENGTH_WEAKENED) score -= 3;
+        if (y.is_void) score -= 2;
+        if (y.is_month_break) score -= 2;
+        if (y.moving) score += 1;
         if (an->candidate_count == 0) score -= 1;  // 用神伏藏
         if (pos == c->shi_pos) score += 1;         // 用神临世:自己掌权
         if (pos == c->ying_pos) score += 1;        // 用神临应:对方主动
@@ -270,49 +323,59 @@ static int tendency_score(const liuyao_result_t *r) {
 }
 
 // 大白话结论里描述卦象特征的那一句:挑最有信息量的事实说,不堆术语。
-// 返回 NULL 表示没有特别值得单说的特征。
-static const char *feature_sentence(const liuyao_result_t *r) {
+// 传入判词分数,保证特征句与判词同一方向;返回 NULL 表示没有特别值得单说的。
+static const char *feature_sentence(const liuyao_result_t *r, int score) {
     const liuyao_chart_t *c = &r->chart;
     const liuyao_analysis_t *an = &r->analysis;
     int pos = primary_candidate(an);
+    bool good = score >= 2;   // 判词”顺”
+    bool bad = score <= -2;   // 判词”滞”
 
     // 优先说卦的大格局:六冲主散、六合主合,是全局性的。
+    // 但判词已经明确向好/向差时,格局句必须与判词同向,否则自相矛盾。
     if (c->pattern == LIUYAO_PATTERN_SIX_CLASH &&
         c->changed_pattern == LIUYAO_PATTERN_SIX_HARMONY) {
-        return "这卦是“先散后聚”,开头闹心,后面能拢回来,别在开头就泄气。";
+        return "这卦是“先散后聚”，开头闹心，后面能拢回来，别在开头就泄气。";
     }
     if (c->pattern == LIUYAO_PATTERN_SIX_HARMONY &&
         c->changed_pattern == LIUYAO_PATTERN_SIX_CLASH) {
-        return "这卦是“先合后散”,前面顺,中途要防生变,好事别拖太久。";
+        return "这卦是“先合后散”，前面顺，中途要防生变，好事别拖太久。";
     }
-    if (c->pattern == LIUYAO_PATTERN_SIX_CLASH) {
-        return "这卦逢六冲,主散主快,事情容易反复,定下来的事要抓紧办。";
+    if (!good && c->pattern == LIUYAO_PATTERN_SIX_CLASH) {
+        return "这卦逢六冲，主散主快，事情容易反复，定下来的事要抓紧办。";
     }
-    if (c->pattern == LIUYAO_PATTERN_SIX_HARMONY) {
-        return "这卦逢六合,主合主成,贵在人和,多拉拢能帮你的人。";
+    if (!bad && c->pattern == LIUYAO_PATTERN_SIX_HARMONY) {
+        return "这卦逢六合，主合主成，贵在人和，多拉拢能帮你的人。";
     }
-    if (pos > 0) {
-        const liuyao_line_t *l = &c->lines[pos - 1];
+    // 伏藏时用伏神自己的旺衰/空破,否则特征句说的是飞神而不是用神。
+    yong_view_t y;
+    if (pos > 0 && yongshen_view(r, &y)) {
         if (an->candidate_count == 0) {
-            return "你关心的这件事,卦里没有明着出现,说明眼下还不到火候,得等机会露头。";
+            // 伏藏要分旺衰:伏而旺是"机会还在酝酿",伏而弱才是"不到火候"。
+            // 不分就会出现判词说顺、特征句叫人等的自相矛盾。
+            if (good) {
+                return "你关心的这件事，卦里没有明着出现，但伏神的底子不弱，"
+                       "机会在暗处酝酿，等它露头时成色更足。";
+            }
+            return "你关心的这件事，卦里没有明着出现，说明眼下还不到火候，得等机会露头。";
         }
-        if (l->is_void) {
-            return "这事现在还“空”着,条件没落实,急也没用,等日子到了自然成形。";
+        if (y.is_void) {
+            return "这事现在还“空”着，条件没落实，急也没用，等日子到了自然成形。";
         }
-        if (l->is_month_break) {
-            return "这个月对这件事不利,硬冲容易碰壁,过了这个月再发力。";
+        if (y.is_month_break) {
+            return "这个月对这件事不利，硬冲容易碰壁，过了这个月再发力。";
         }
-        if (l->moving && l->change_advance == 1) {
-            return "关键的那一爻在化进神,势头在往上走,可以顺势加一把劲。";
+        if (y.moving && y.change_advance == 1) {
+            return "关键的那一爻在化进神，势头在往上走，可以顺势加一把劲。";
         }
-        if (l->moving && l->change_advance == -1) {
-            return "关键的那一爻在化退神,后劲不足,见好就收别贪。";
+        if (y.moving && y.change_advance == -1) {
+            return "关键的那一爻在化退神，后劲不足，见好就收别贪。";
         }
-        if (l->strength == LIUYAO_STRENGTH_WEAKENED) {
-            return "这卦里帮你的人不多,更多是阻力,这时候稳比冲更重要。";
+        if (!good && y.strength == LIUYAO_STRENGTH_WEAKENED) {
+            return "这卦里帮你的人不多，更多是阻力，这时候稳比冲更重要。";
         }
-        if (l->strength == LIUYAO_STRENGTH_SUPPORTED) {
-            return "这卦里生扶的力量足,条件是向着你的,可以放手做一些尝试。";
+        if (!bad && y.strength == LIUYAO_STRENGTH_SUPPORTED) {
+            return "这卦里生扶的力量足，条件是向着你的，可以放手做一些尝试。";
         }
     }
     // 动爻冲克世爻:外力给你施压。
@@ -350,15 +413,18 @@ static void page_conclusion(const liuyao_result_t *r, appender_t *a) {
     int score = tendency_score(r);
     int category = an->category;
     if (category < 0 || category >= LIUYAO_CAT_COUNT) category = 0;
-    apf(a, "【结论】\n综合来看:%s",
-        score >= 2 ? "事情比较顺,条件对你有利,想做的事可以放心去做。\n"
-                   : score <= -2
-                         ? "眼下不太顺,阻力比较多,先别急着推进,缓一缓、稳一稳更好。\n"
-                         : "说不上好也说不上坏,关键看你自己的安排和时机抓得怎么样。\n");
-    const char *feature = feature_sentence(r);
+    // 判词与特征句必须同一方向:特征句按判词倾向选择,避免上句说"顺"、
+    // 下句说"逢冲主散"这种自相矛盾的读感。
+    const char *verdict = score >= 2
+                              ? "事情比较顺，条件对你有利，想做的事可以放心去做。\n"
+                              : score <= -2
+                                    ? "眼下不太顺，阻力比较多，先别急着推进，缓一缓、稳一稳更好。\n"
+                                    : "说不上好也说不上坏，关键看你自己的安排和时机抓得怎么样。\n";
+    apf(a, "【结论】\n综合来看:%s", verdict);
+    const char *feature = feature_sentence(r, score);
     if (feature) apf(a, "%s\n", feature);
     apf(a, "%s\n", k_plain_advice[category]);
-    apf(a, "这些说法只是参考,事情最后怎么样,还得看你自己。\n");
+    apf(a, "这些说法只是参考，事情最后怎么样，还得看你自己。\n");
 }
 
 void liuyao_compose_reading(const liuyao_result_t *result, const char *day_gz,

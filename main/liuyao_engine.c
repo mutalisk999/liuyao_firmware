@@ -363,6 +363,17 @@ bool liuyao_cast(const liuyao_casting_t *casting, liuyao_result_t *out) {    if 
         h->is_month_break = branch == (month_branch + 6) % 12;
         h->is_day_clash = branch == (day_branch + 6) % 12;
         h->flying_branch = c->lines[i].branch;
+        // 伏神旺衰按伏神自身地支与月日推,与压在上面的飞神无关。
+        bool h_support = (relation_of(month_element, element) == LIUYAO_REL_SAME ||
+                          relation_of(month_element, element) == LIUYAO_REL_GENERATES ||
+                          relation_of(day_element, element) == LIUYAO_REL_SAME ||
+                          relation_of(day_element, element) == LIUYAO_REL_GENERATES);
+        bool h_pressure = (relation_of(month_element, element) == LIUYAO_REL_CONTROLS ||
+                           relation_of(day_element, element) == LIUYAO_REL_CONTROLS);
+        h->strength = h_support && h_pressure ? LIUYAO_STRENGTH_CONTESTED
+                      : h_support      ? LIUYAO_STRENGTH_SUPPORTED
+                      : h_pressure     ? LIUYAO_STRENGTH_WEAKENED
+                                       : LIUYAO_STRENGTH_NEUTRAL;
     }
 
     // 用神。

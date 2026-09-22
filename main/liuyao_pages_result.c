@@ -132,8 +132,11 @@ static void reading_show(struct liyao_app_s *app) {
         app->reading_valid = true;
     }
     lv_label_set_text(app->reading.body, app->reading_text.pages[app->reading_page]);
-    lv_label_set_text_fmt(app->reading.page_label, "%d/%d", app->reading_page + 1,
-                          app->reading_text.page_count);
+    // 页面超长时 apf 会静默截断(只置 truncated 标记)。在页码上挂一个"*",
+    // 让用户知道这一页没装全,而不是误以为原文就到此为止。
+    lv_label_set_text_fmt(app->reading.page_label, "%d/%d%s", app->reading_page + 1,
+                          app->reading_text.page_count,
+                          app->reading_text.truncated ? "*" : "");
     lv_obj_scroll_to(app->reading.scroll, 0, 0, LV_ANIM_OFF);
 }
 

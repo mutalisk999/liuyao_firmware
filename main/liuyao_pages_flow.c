@@ -248,6 +248,9 @@ static void date_key(struct liyao_app_s *app, bsp_btn_t btn, bsp_btn_ev_t ev) {
             date_refresh(app);
         }
     } else if (btn == BSP_BTN_OK && ev == BSP_BTN_LONG) {
+        // 返回上层时也存盘:UP/DOWN 已改过内存里的日期,不存就会与
+        // NVS 中的"上次日期"不一致,下次进页又显示旧值。
+        ly_app_save_last_date(app);
         ly_app_goto(app, LY_STATE_CATEGORY);
     }
 }

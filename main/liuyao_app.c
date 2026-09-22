@@ -34,6 +34,8 @@ typedef struct {
 } ly_input_event_t;
 
 // 队列唤醒标记:定时器回调发起切页后叫醒应用任务(事件本身无按键语义)。
+// 取 -1 是因为 bsp_btn_ev_t 的合法取值是 0..3,-1 永不会与真实按键事件撞车;
+// 显式命名出来,避免阅读时误以为这是个笔误。
 #define LY_EV_WAKE ((bsp_btn_ev_t)-1)
 
 static struct liyao_app_s s_app;

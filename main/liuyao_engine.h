@@ -92,6 +92,7 @@ typedef struct {
     bool is_month_break;
     bool is_day_clash;
     const char *flying_branch;  // 同位飞神地支
+    liuyao_strength_t strength;  // 伏神自身旺衰(与飞神无关)
 } liuyao_hidden_t;
 
 typedef struct {
