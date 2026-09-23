@@ -114,7 +114,7 @@ static void test_reading_content(void) {
     r = cast_lines(all6, 30, 5, LIUYAO_CAT_RELATION, LIUYAO_PERSP_FEMALE);
     liuyao_compose_reading(&r, "甲午", "癸酉", &reading);
     assert(strstr(reading.pages[1], "官鬼") != NULL);
-    assert(strstr(reading.pages[3], "综合来看") != NULL);
+    assert(strstr(reading.pages[3], "综合倾向") != NULL);
 
     // 出行:用神为世爻。
     const int travel_lines[6] = {7, 8, 8, 8, 8, 8};
@@ -128,7 +128,7 @@ static void test_reading_content(void) {
         r = cast_lines(lines, 5, 1, (liuyao_category_t)cat,
                        LIUYAO_PERSP_UNSPECIFIED);
         liuyao_compose_reading(&r, NULL, NULL, &reading);
-        assert(strstr(reading.pages[3], "综合来看") != NULL);
+        assert(strstr(reading.pages[3], "综合倾向") != NULL);
     }
 }
 

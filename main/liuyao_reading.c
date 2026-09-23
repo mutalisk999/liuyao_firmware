@@ -335,96 +335,86 @@ static const char *feature_sentence(const liuyao_result_t *r, int score) {
     // 但判词已经明确向好/向差时,格局句必须与判词同向,否则自相矛盾。
     if (c->pattern == LIUYAO_PATTERN_SIX_CLASH &&
         c->changed_pattern == LIUYAO_PATTERN_SIX_HARMONY) {
-        return "这卦是“先散后聚”，开头闹心，后面能拢回来，别在开头就泄气。";
+        return "卦逢六冲化六合,主先散后聚,初虽纷扰,终见和合。";
     }
     if (c->pattern == LIUYAO_PATTERN_SIX_HARMONY &&
         c->changed_pattern == LIUYAO_PATTERN_SIX_CLASH) {
-        return "这卦是“先合后散”，前面顺，中途要防生变，好事别拖太久。";
+        return "卦逢六合化六冲,主先合后散,须防中道生变。";
     }
     if (!good && c->pattern == LIUYAO_PATTERN_SIX_CLASH) {
-        return "这卦逢六冲，主散主快，事情容易反复，定下来的事要抓紧办。";
+        return "卦逢六冲,主散主快,事多反复,已定者宜速行。";
     }
     if (!bad && c->pattern == LIUYAO_PATTERN_SIX_HARMONY) {
-        return "这卦逢六合，主合主成，贵在人和，多拉拢能帮你的人。";
+        return "卦逢六合,主合主成,贵在人和,宜借助力。";
     }
     // 伏藏时用伏神自己的旺衰/空破,否则特征句说的是飞神而不是用神。
     yong_view_t y;
     if (pos > 0 && yongshen_view(r, &y)) {
         if (an->candidate_count == 0) {
-            // 伏藏要分旺衰:伏而旺是"机会还在酝酿",伏而弱才是"不到火候"。
+            // 伏藏要分旺衰:伏而旺是"时机未到",伏而弱才是"用神无力"。
             // 不分就会出现判词说顺、特征句叫人等的自相矛盾。
             if (good) {
-                return "你关心的这件事，卦里没有明着出现，但伏神的底子不弱，"
-                       "机会在暗处酝酿，等它露头时成色更足。";
+                return "用神伏藏不现,然伏神旺相,待引拔之时可成。";
             }
-            return "你关心的这件事，卦里没有明着出现，说明眼下还不到火候，得等机会露头。";
+            return "用神伏藏不现,眼下时机未至,须待露头之日。";
         }
         if (y.is_void) {
-            return "这事现在还“空”着，条件没落实，急也没用，等日子到了自然成形。";
+            // 空而旺与空而衰断法不同:旺则出空即发,衰则出空亦虚。
+            return good ? "用神值旬空而旺相,待出空之日可发。"
+                        : "用神值旬空,力量未实,待出空之日方有应。";
         }
         if (y.is_month_break) {
-            return "这个月对这件事不利，硬冲容易碰壁，过了这个月再发力。";
+            // 月破逢旺相,过月实破可成;休囚逢破,方为本月难为。
+            return good ? "用神逢月破而得令,过月实破可成。"
+                        : "用神逢月破,本月难为,待过月实破方顺。";
         }
-        if (y.moving && y.change_advance == 1) {
-            return "关键的那一爻在化进神，势头在往上走，可以顺势加一把劲。";
+        if (!bad && y.moving && y.change_advance == 1) {
+            return "用神化进神,其势渐旺,宜顺势而为。";
         }
-        if (y.moving && y.change_advance == -1) {
-            return "关键的那一爻在化退神，后劲不足，见好就收别贪。";
+        if (!good && y.moving && y.change_advance == -1) {
+            return "用神化退神,后劲渐衰,宜见好则收。";
         }
         if (!good && y.strength == LIUYAO_STRENGTH_WEAKENED) {
-            return "这卦里帮你的人不多，更多是阻力，这时候稳比冲更重要。";
+            return "卦中克泄交加,生扶者寡,宜守不宜攻。";
         }
         if (!bad && y.strength == LIUYAO_STRENGTH_SUPPORTED) {
-            return "这卦里生扶的力量足，条件是向着你的，可以放手做一些尝试。";
+            return "卦中生扶有力,用神得助,可为可进。";
         }
     }
-    // 动爻冲克世爻:外力给你施压。
+    // 动爻冲克世爻:外力施压。
     int shi_branch = c->lines[c->shi_pos - 1].branch_index;
     for (int i = 0; i < LIUYAO_LINE_COUNT; i++) {
         if (!c->lines[i].moving || c->lines[i].is_shi) continue;
-        if (action_to(&c->lines[i], shi_branch) == -1) {
-            return "有动爻在克制你的位置,外部有人或事在压你,先摸清来路再应对。";
+        if (!good && action_to(&c->lines[i], shi_branch) == -1) {
+            return "有动爻克制世爻,外力相压,宜先察其来路。";
         }
     }
     for (int i = 0; i < LIUYAO_LINE_COUNT; i++) {
         if (!c->lines[i].moving || c->lines[i].is_shi) continue;
-        if (action_to(&c->lines[i], shi_branch) == 1) {
-            return "有动爻在生扶你的位置,暗处有人帮你,不用一个人硬扛。";
+        if (!bad && action_to(&c->lines[i], shi_branch) == 1) {
+            return "有动爻生扶世爻,暗有助力,不必独支。";
         }
     }
     return NULL;
 }
 
-// 结论页分类白话建议(不用术数词,普通人口吻;下标与 liuyao_category 对齐)。
-static const char *const k_plain_advice[LIUYAO_CAT_COUNT] = {
-    "不管问什么,先把最要紧的一件事定下来,其他事会跟着顺。",
-    "工作上的事,稳住手头的节奏,该争取就去争取,别自己吓自己。",
-    "钱的事急不来,看准了再出手,别把本钱放在不踏实的地方。",
-    "感情的事多沟通、少猜疑,心意到了,关系自然会缓和。",
-    "学习没有捷径,按计划一步步来,考试时放平心态就好。",
-    "出发前把行程和证件都核对好,路上稳一点,别赶时间。",
-    "家里的事,先把住的地方收拾顺当,家人之间多体谅。",
-    "打官司费心费力,能协商解决最好,不行就把证据准备齐全。",
-    "家里人之间多说说心里话,小事别计较,气氛好了事就顺。",
-};
+// 结论页:综合倾向(趋吉/偏滞/中平)+ 特征句 + 分类主线 + 参考声明。
+// 文案保持传统断语风格,不用大白话;分类主线见 liuyao_category_focus()。
 
 static void page_conclusion(const liuyao_result_t *r, appender_t *a) {
     const liuyao_analysis_t *an = &r->analysis;
     int score = tendency_score(r);
-    int category = an->category;
-    if (category < 0 || category >= LIUYAO_CAT_COUNT) category = 0;
-    // 判词与特征句必须同一方向:特征句按判词倾向选择,避免上句说"顺"、
-    // 下句说"逢冲主散"这种自相矛盾的读感。
-    const char *verdict = score >= 2
-                              ? "事情比较顺，条件对你有利，想做的事可以放心去做。\n"
-                              : score <= -2
-                                    ? "眼下不太顺，阻力比较多，先别急着推进，缓一缓、稳一稳更好。\n"
-                                    : "说不上好也说不上坏，关键看你自己的安排和时机抓得怎么样。\n";
-    apf(a, "【结论】\n综合来看:%s", verdict);
+    // 综合倾向只作相对之论,不断定吉凶;特征句与判词同向(见 feature_sentence)。
+    apf(a, "【结论】\n综合倾向:%s\n",
+        score >= 2 ? "趋吉——用神得力，大局向好，宜把握时机推进。"
+                   : score <= -2
+                         ? "偏滞——阻力偏重，时机未至，宜缓图守正，不宜强求。"
+                         : "中平——吉凶相参，成败系于作为与时机，宜稳中求进。");
     const char *feature = feature_sentence(r, score);
     if (feature) apf(a, "%s\n", feature);
-    apf(a, "%s\n", k_plain_advice[category]);
-    apf(a, "这些说法只是参考，事情最后怎么样，还得看你自己。\n");
+    const char *focus = liuyao_category_focus(an->category);
+    if (focus) apf(a, "%s\n", focus);
+    apf(a, "六爻乃传统术数参考，吉凶在人，行止由己。\n");
 }
 
 void liuyao_compose_reading(const liuyao_result_t *result, const char *day_gz,
